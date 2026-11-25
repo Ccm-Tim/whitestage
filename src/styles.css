@@ -2771,6 +2771,48 @@ button {
   color: var(--accent);
   background: var(--accent-soft);
 }
+.tl-kf.selected {
+  border-color: #ffb45e;
+  color: #ffe0b6;
+  background: #4a321a;
+  box-shadow: 0 0 8px rgba(255, 174, 80, 0.3);
+}
+.tl-kf.selected.active {
+  border-color: #ffd08a;
+  color: #fff3df;
+}
+.tl-selected {
+  color: #ffbd73;
+  font-size: 9.5px;
+  white-space: nowrap;
+}
+.tl-chip.danger,
+.tl-clear-all {
+  color: #e9b1a9;
+  border-color: rgba(220, 120, 110, 0.3);
+  white-space: nowrap;
+}
+.tl-chip.danger:hover,
+.tl-clear-all:hover:not(:disabled) {
+  color: #ffd0c9;
+  border-color: rgba(240, 140, 130, 0.55);
+  background: rgba(120, 45, 40, 0.25);
+}
+.tl-clear-all:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+@media (max-width: 1180px) {
+  .tl-meta .tl-count,
+  .tl-meta .tl-dot,
+  .tl-meta .tl-fps {
+    display: none;
+  }
+  .tl-meta .tl-chip {
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+}
 .tl-frame-input,
 .tl-time-input {
   width: 48px;
