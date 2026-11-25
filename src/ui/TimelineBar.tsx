@@ -1,10 +1,23 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { useStore } from '../store/useStore'
-import { nearestKeyframeFrame } from '../core/timeline'
-import { IconChevron, IconPause, IconPin, IconPlay, IconTrash } from './Icons'
+import { activeCameraIdAt, cameraCutAt } from '../core/timeline'
+import { IconChevron, IconPause, IconPin, IconPlay, IconScissors, IconTrash } from './Icons'
 
 const STEP = 1
 const SNAP_FRAMES = 4
+
+function nearestTimelineFrame(frames: number[], frame: number, threshold = SNAP_FRAMES): number {
+  let best = frame
+  let bestDistance = threshold + 1
+  for (const candidate of frames) {
+    const distance = Math.abs(candidate - frame)
+    if (distance < bestDistance) {
+      bestDistance = distance
+      best = candidate
+    }
+  }
+  return bestDistance <= threshold ? best : frame
+}
 
 export function TimelineBar() {
   const project = useStore((s) => s.project)
@@ -17,17 +30,29 @@ export function TimelineBar() {
   const stepFrames = useStore((s) => s.stepFrames)
   const addKeyframe = useStore((s) => s.addKeyframe)
   const removeKeyframe = useStore((s) => s.removeKeyframe)
+  const setProgramCamera = useStore((s) => s.setProgramCamera)
+  const removeCameraCut = useStore((s) => s.removeCameraCut)
   const setDurationFrames = useStore((s) => s.setDurationFrames)
   const setAutoKey = useStore((s) => s.setAutoKey)
   const [snap, setSnap] = useState(true)
+  const [cutCamera, setCutCamera] = useState('')
   const trackRef = useRef<HTMLDivElement>(null)
   const draggingRef = useRef(false)
 
   const fps = project?.output.fps || 24
   const duration = project?.timeline.durationFrames || 240
   const keyframes = project?.timeline.keyframes ?? []
+  const cuts = project?.timeline.cameraCuts ?? []
+  const cameras = project?.cameras ?? []
+  const programCameraId = project ? (activeCameraIdAt(project, playhead) ?? '') : ''
+  const currentCut = cameraCutAt(cuts, playhead)
   const currentHasKey = keyframes.some((keyframe) => keyframe.frame === playhead)
   const ratio = Math.min(1, Math.max(0, playhead / Math.max(1, duration)))
+
+  useEffect(() => {
+    if (!project) return
+    setCutCamera(programCameraId)
+  }, [project, playhead, programCameraId])
 
   useEffect(() => {
     if (!playing) return
@@ -82,7 +107,8 @@ export function TimelineBar() {
     const usable = Math.max(1, rect.width - 20)
     const raw = Math.round(((clientX - rect.left - 10) / usable) * duration)
     const frame = Math.max(0, Math.min(duration, raw))
-    const snapped = snap ? nearestKeyframeFrame(keyframes, frame, SNAP_FRAMES) : frame
+    const snapFrames = [...keyframes.map((keyframe) => keyframe.frame), ...cuts.map((cut) => cut.frame)]
+    const snapped = snap ? nearestTimelineFrame(snapFrames, frame, SNAP_FRAMES) : frame
     setPlaying(false)
     setPlayhead(snapped)
   }
@@ -104,6 +130,11 @@ export function TimelineBar() {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId)
     }
+  }
+
+  const frameLeft = (value: number) => {
+    const pct = Math.min(1, Math.max(0, value / Math.max(1, duration)))
+    return `calc(${pct * 100}% + ${10 - pct * 20}px)`
   }
 
   return (
@@ -187,6 +218,26 @@ export function TimelineBar() {
           className="tl-head"
           style={{ left: `calc(${ratio * 100}% + ${10 - ratio * 20}px)` }}
         />
+        {cuts.map((cut) => {
+          const camera = cameras.find((item) => item.id === cut.cameraId)
+          return (
+            <button
+              key={cut.id}
+              className={`tl-cut ${cut.frame === playhead ? 'active' : ''}`}
+              style={{ left: frameLeft(cut.frame) }}
+              title={`切镜 ${cut.frame} · ${camera?.name ?? '已删除机位'}`}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation()
+                setPlaying(false)
+                setPlayhead(cut.frame)
+                setCutCamera(cut.cameraId)
+              }}
+            >
+              <IconScissors size={10} />
+            </button>
+          )
+        })}
         {keyframes.map((keyframe) => (
           <button
             key={keyframe.frame}
@@ -208,7 +259,7 @@ export function TimelineBar() {
           </button>
         ))}
         {keyframes.length === 0 ? (
-          <span className="tl-empty">点右侧图钉记录当前帧，空格播放</span>
+          <span className="tl-empty">图钉记关键帧 · 剪刀切镜 · 空格播放</span>
         ) : null}
       </div>
 
@@ -222,11 +273,44 @@ export function TimelineBar() {
         </button>
         <button
           className={`tl-chip ${snap ? 'on' : ''}`}
-          title="拖动时间线时吸附到附近关键帧"
+          title="拖动时间线时吸附到附近关键帧 / 切镜"
           onClick={() => setSnap((value) => !value)}
         >
           吸附
         </button>
+        <div className="tl-cuts" title="节目切镜：第 N 帧起输出所选机位">
+          <span className="tl-cuts-label">切镜</span>
+          <select
+            className="tl-cut-select"
+            value={cutCamera || programCameraId}
+            disabled={cameras.length === 0}
+            onChange={(event) => setCutCamera(event.target.value)}
+            title="要切到的节目机位"
+          >
+            {cameras.length === 0 ? <option value="">无机位</option> : null}
+            {cameras.map((camera) => (
+              <option key={camera.id} value={camera.id}>
+                {camera.name}
+              </option>
+            ))}
+          </select>
+          <button
+            className="icon-btn sm"
+            title="在当前帧切到所选机位"
+            disabled={!cutCamera || cameras.length === 0}
+            onClick={() => setProgramCamera(cutCamera)}
+          >
+            <IconScissors size={13} />
+          </button>
+          <button
+            className="icon-btn sm"
+            title={playhead === 0 ? '0 帧是基准切镜，不能删除' : '删除当前帧切镜'}
+            disabled={!currentCut || playhead === 0}
+            onClick={() => removeCameraCut(playhead)}
+          >
+            <IconTrash size={13} />
+          </button>
+        </div>
         <button
           className={`icon-btn sm ${currentHasKey ? 'active' : ''}`}
           title={currentHasKey ? '更新当前帧关键帧' : '记录当前帧关键帧'}
@@ -242,7 +326,7 @@ export function TimelineBar() {
         >
           <IconTrash size={13} />
         </button>
-        <span className="tl-count">{keyframes.length} 关键帧</span>
+        <span className="tl-count">{keyframes.length} 关键帧 · {cuts.length} 切镜</span>
         <label className="tl-duration" title="时间线长度（帧）">
           长度
           <input

@@ -89,7 +89,7 @@ export function VideoExportDialog({
     <Modal
       open={open}
       title="导出视频"
-      subtitle="逐帧渲染主预览机位或当前分屏；视频编码依赖 Chrome / Edge WebCodecs"
+      subtitle="逐帧渲染节目切镜或当前分屏；视频编码依赖 Chrome / Edge WebCodecs"
       onClose={() => {
         if (busy) {
           abortRef.current?.abort()
@@ -137,7 +137,7 @@ export function VideoExportDialog({
             onChange={(event) => setSource(event.target.value as VideoSource)}
             disabled={busy}
           >
-            <option value="camera">主预览机位（单画面）</option>
+            <option value="camera">节目切镜轨（单画面）</option>
             <option value="preview">当前分屏布局（逐格合成）</option>
           </select>
         </Field>
@@ -215,8 +215,13 @@ export function VideoExportDialog({
         </div>
         <Readout>
           {totalFrames} 帧 · {(totalFrames / Math.max(1, fps)).toFixed(2)} 秒 ·{' '}
-          {source === 'preview' ? '当前分屏布局' : '主预览机位'}
+          {source === 'preview' ? '当前分屏布局' : '节目切镜轨'}
         </Readout>
+
+        <p className="note">
+          单画面按时间线「切镜」轨逐帧切换机位：第 N 帧切到某机位后，一直使用到下一个切点。
+          分屏布局则按每个格子的机位逐格合成；切镜轨不影响分屏。
+        </p>
 
         {busy || progress ? (
           <div className="export-progress">

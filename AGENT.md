@@ -135,6 +135,9 @@ curl.exe -s http://127.0.0.1:8787/rpc -H "content-type: application/json" -H "x-
 | `timeline.list` | 关键帧列表 / 当前帧 / 播放状态 |
 | `timeline.addKeyframe` | 当前帧记录 / 更新关键帧 |
 | `timeline.removeKeyframe` | 删除 `{frame}`，省略则当前帧 |
+| `timeline.listCuts` | 节目切镜列表 |
+| `timeline.addCut` | 在 `{frame}`（省略当前帧）切到 `{cameraId}`（省略当前节目机位） |
+| `timeline.removeCut` | 删除 `{frame}` 的切镜，省略则当前帧 |
 | `timeline.setPlayhead` | 跳到 `{frame}` |
 | `timeline.play` / `timeline.pause` | 播放 / 暂停 |
 | `timeline.setDuration` | 时间线长度 `{frames}` |
@@ -204,5 +207,5 @@ curl.exe -s http://127.0.0.1:8787/rpc -H "content-type: application/json" -H "x-
 
 - 需要 WhiteStage 页面保持打开；页面关闭后没有可控制实例。
 - 文件上传 / 全景图片导入还没有 Agent 命令，后续会补 dataURL/文件接口。
-- 时间线、视频导出、多机位分屏尚未完成，相关命令要等对应模块。
+- 时间线、视频导出、多机位分屏和节目切镜已开放；文件上传 / 全景图片导入的 Agent 命令后续补充。
 - 一个页面只接受一个本地 Agent 命令队列；多 Agent 共享同一队列。

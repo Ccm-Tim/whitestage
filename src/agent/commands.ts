@@ -53,9 +53,12 @@ export const AGENT_COMMANDS = [
   { method: 'background.board.sort', description: '按文件名序号排序' },
   { method: 'background.board.fallback', params: { color: 'string' } },
   { method: 'tool.set', params: { tool: 'select|translate|rotate|scale' } },
-  { method: 'timeline.list', description: '列出时间线关键帧' },
+  { method: 'timeline.list', description: '列出时间线关键帧与切镜' },
   { method: 'timeline.addKeyframe', description: '在当前帧记录 / 更新关键帧' },
   { method: 'timeline.removeKeyframe', params: { frame: 'number?' } },
+  { method: 'timeline.listCuts', description: '列出节目切镜' },
+  { method: 'timeline.addCut', params: { cameraId: 'string?', frame: 'number?' } },
+  { method: 'timeline.removeCut', params: { frame: 'number?' } },
   { method: 'timeline.setPlayhead', params: { frame: 'number' } },
   { method: 'timeline.play', description: '播放' },
   { method: 'timeline.pause', description: '暂停' },
@@ -317,11 +320,38 @@ export async function executeAgentCommand(method: string, params: Params = {}): 
     case 'timeline.list':
       return {
         frames: project().timeline.keyframes.map((keyframe) => keyframe.frame),
+        cuts: project().timeline.cameraCuts,
         durationFrames: project().timeline.durationFrames,
         playhead: state().playheadFrame,
         playing: state().playing,
         autoKey: state().autoKey,
       }
+
+    case 'timeline.listCuts':
+      return {
+        cuts: project().timeline.cameraCuts,
+        playhead: state().playheadFrame,
+      }
+
+    case 'timeline.addCut': {
+      const targetFrame =
+        typeof params.frame === 'number' ? Number(params.frame) : state().playheadFrame
+      state().setPlayhead(targetFrame)
+      const cameraId =
+        typeof params.cameraId === 'string'
+          ? params.cameraId
+          : (project().ui.preview.cameraId ?? project().cameras[0]?.id)
+      if (!cameraId) throw new Error('没有可用机位')
+      state().setProgramCamera(cameraId, targetFrame)
+      return {
+        cuts: project().timeline.cameraCuts,
+        playhead: state().playheadFrame,
+      }
+    }
+
+    case 'timeline.removeCut':
+      state().removeCameraCut(typeof params.frame === 'number' ? params.frame : undefined)
+      return { cuts: project().timeline.cameraCuts }
 
     case 'timeline.addKeyframe':
       state().addKeyframe()

@@ -10,6 +10,7 @@ import { ASPECTS } from './constants'
 import { lookAtRotation } from './math'
 import { createSceneObject, normalizeObjects } from './objects'
 import { normalizeFreePreviewGrid } from './preview'
+import { normalizeCameraCuts } from './timeline'
 
 export const uid = (): string => {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
@@ -125,7 +126,11 @@ export function createProject(name: string, aspect: AspectId = '16:9'): Project 
     output: { aspect, width: a.width, height: a.height, fps: 24 },
     cameras: [cam],
     objects: [],
-    timeline: { keyframes: [], durationFrames: 240 },
+    timeline: {
+      keyframes: [],
+      durationFrames: 240,
+      cameraCuts: [{ id: `cut-0-${cam.id}`, frame: 0, cameraId: cam.id }],
+    },
     ui: {
       preview: {
         visible: true,
@@ -163,6 +168,10 @@ export function createDemoProject(): Project {
   dog.rotation = { x: 0, y: -0.55, z: 0 }
   p.objects = [man, dog]
   p.ui.preview.cameraId = p.cameras[0].id
+  p.timeline.cameraCuts = [
+    { id: `cut-0-${p.cameras[0].id}`, frame: 0, cameraId: p.cameras[0].id },
+    { id: `cut-120-${p.cameras[1].id}`, frame: 120, cameraId: p.cameras[1].id },
+  ]
   return p
 }
 
@@ -282,6 +291,16 @@ export function normalizeProject(input: Partial<Project> & { name?: string }): P
   }
   const stage = { ...base.stage, ...(input.stage ?? {}) }
   stage.gridWidth = Math.min(8, Math.max(1, Number(stage.gridWidth) || base.stage.gridWidth))
+  const durationFrames = Math.max(
+    12,
+    Math.min(3600, Math.round(Number(input.timeline?.durationFrames) || base.timeline.durationFrames)),
+  )
+  const cameraCuts = normalizeCameraCuts(
+    input.timeline?.cameraCuts,
+    cameras.map((camera) => camera.id),
+    durationFrames,
+    preview.cameraId,
+  )
 
   return {
     ...base,
@@ -295,7 +314,11 @@ export function normalizeProject(input: Partial<Project> & { name?: string }): P
     output: { ...base.output, ...(input.output ?? {}) },
     cameras,
     objects,
-    timeline: input.timeline ?? base.timeline,
+    timeline: {
+      keyframes: input.timeline?.keyframes ?? [],
+      durationFrames,
+      cameraCuts,
+    },
     ui: {
       preview,
       tool: input.ui?.tool ?? base.ui.tool,

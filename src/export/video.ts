@@ -9,6 +9,7 @@ import {
   previewSlotCount,
 } from '../core/preview'
 import { FlvMuxer } from './flvMuxer'
+import { activeCameraIdAt } from '../core/timeline'
 
 export type VideoFormat = 'webm' | 'mp4' | 'mov' | 'flv' | 'png'
 export type VideoSource = 'camera' | 'preview'
@@ -98,12 +99,13 @@ async function renderFrame(
   const project = useStore.getState().project
   if (!project) throw new Error('没有打开的工程')
   const cameraFor = (id: string) => project.cameras.find((camera) => camera.id === id)
+  const activeCameraId = activeCameraIdAt(project, frame) ?? cameraId
 
   if (source === 'camera') {
-    const camera = cameraFor(cameraId)
+    const camera = cameraFor(activeCameraId)
     const canvas = camera?.dof
-      ? engine.renderCameraFrameWithDof(cameraId, width, height)
-      : engine.renderCameraFrame(cameraId, width, height)
+      ? engine.renderCameraFrameWithDof(activeCameraId, width, height)
+      : engine.renderCameraFrame(activeCameraId, width, height)
     if (!canvas) throw new Error('当前机位不可渲染')
     return canvas
   }
@@ -112,13 +114,16 @@ async function renderFrame(
   const layout = normalizePreviewLayout(preview.layout)
   const free = normalizeFreePreviewGrid(preview.free)
   const slots = previewSlotCount(layout, free)
-  const ids = normalizeCameraSlots(
-    layout,
-    preview.cameraIds ?? [],
-    project.cameras.map((camera) => camera.id),
-    preview.cameraId ?? undefined,
-    slots,
-  )
+  const ids =
+    layout === 'single'
+      ? [activeCameraId]
+      : normalizeCameraSlots(
+          layout,
+          preview.cameraIds ?? [],
+          project.cameras.map((camera) => camera.id),
+          preview.cameraId ?? undefined,
+          slots,
+        )
   const cells = previewCells(layout, free)
   const output = document.createElement('canvas')
   output.width = width

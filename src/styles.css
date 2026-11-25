@@ -2567,7 +2567,7 @@ button {
 .tl-track {
   position: relative;
   flex: 1;
-  height: 30px;
+  height: 38px;
   min-width: 0;
   border: 1px solid var(--border-soft);
   border-radius: 6px;
@@ -2578,7 +2578,7 @@ button {
   position: absolute;
   left: 10px;
   right: 10px;
-  top: 50%;
+  top: 68%;
   height: 2px;
   transform: translateY(-50%);
   border-radius: 1px;
@@ -2587,16 +2587,16 @@ button {
 .tl-progress {
   position: absolute;
   left: 0;
-  top: 50%;
+  top: 68%;
   height: 2px;
   transform: translateY(-50%);
   background: var(--accent);
 }
 .tl-head {
   position: absolute;
-  top: 6px;
+  top: 10px;
   width: 2px;
-  height: 16px;
+  height: 22px;
   border-radius: 1px;
   background: #cfe1ff;
   box-shadow: 0 0 8px rgba(120, 170, 255, 0.7);
@@ -2669,7 +2669,7 @@ button {
 }
 .tl-kf {
   position: absolute;
-  top: 50%;
+  top: 68%;
   z-index: 3;
   width: 18px;
   height: 18px;
@@ -2682,6 +2682,63 @@ button {
   background: #1a2430;
   color: #9fc3f2;
   cursor: pointer;
+}
+.tl-cut {
+  position: absolute;
+  top: 2px;
+  z-index: 5;
+  width: 18px;
+  height: 15px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  transform: translateX(-50%);
+  border: 1px solid rgba(255, 184, 99, 0.62);
+  border-radius: 3px;
+  background: #2a2116;
+  color: #ffbd73;
+  cursor: pointer;
+}
+.tl-cut::after {
+  content: '';
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  width: 1px;
+  height: 10px;
+  background: rgba(255, 184, 99, 0.5);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.tl-cut:hover,
+.tl-cut.active {
+  border-color: #ffb45e;
+  color: #ffe0b6;
+  background: #4a321a;
+  box-shadow: 0 0 10px rgba(255, 174, 80, 0.3);
+}
+.tl-cuts {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex: none;
+}
+.tl-cuts-label {
+  font-size: 9.5px;
+  color: #c7965f;
+  letter-spacing: 0.02em;
+}
+.tl-cut-select {
+  height: 22px;
+  max-width: 108px;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #111821;
+  color: #d6c3aa;
+  font-family: inherit;
+  font-size: 9.5px;
+  outline: none;
 }
 .tl-kf:hover,
 .tl-kf.active {

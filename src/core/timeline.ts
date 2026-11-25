@@ -1,4 +1,4 @@
-import type { CameraConfig, Keyframe, Project, SceneObject, Vec3 } from './types'
+import type { CameraConfig, CameraCut, Keyframe, Project, SceneObject, Vec3 } from './types'
 import { objectAimHeight } from './objects'
 
 export interface CameraTrack {
@@ -26,6 +26,71 @@ export interface TimelineSnapshot {
 }
 
 export const DEFAULT_TIMELINE_FRAMES = 240
+
+export function sortCameraCuts(cuts: CameraCut[]): CameraCut[] {
+  return cuts.slice().sort((a, b) => a.frame - b.frame)
+}
+
+/**
+ * 清洗切镜表：移除无效机位、限制在时间线内、同一帧只保留最后一个，
+ * 并保证 0 帧有一个基准机位；没有切镜时用预览机位 / 第一个机位兜底。
+ */
+export function normalizeCameraCuts(
+  raw: CameraCut[] | undefined,
+  cameraIds: string[],
+  durationFrames: number,
+  fallbackCameraId?: string | null,
+): CameraCut[] {
+  const valid = new Set(cameraIds)
+  const duration = Math.max(1, Math.round(durationFrames))
+  const byFrame = new Map<number, CameraCut>()
+  for (const cut of raw ?? []) {
+    if (!cut || !valid.has(cut.cameraId)) continue
+    const frame = Math.max(0, Math.min(duration, Math.round(Number(cut.frame) || 0)))
+    byFrame.set(frame, {
+      id: cut.id || `cut-${frame}-${cut.cameraId}`,
+      frame,
+      cameraId: cut.cameraId,
+    })
+  }
+  const cuts = [...byFrame.values()].sort((a, b) => a.frame - b.frame)
+  const fallback =
+    (fallbackCameraId && valid.has(fallbackCameraId) ? fallbackCameraId : null) ??
+    cameraIds[0] ??
+    null
+  if (fallback && (cuts.length === 0 || cuts[0].frame > 0)) {
+    cuts.unshift({
+      id: `cut-0-${fallback}`,
+      frame: 0,
+      cameraId: fallback,
+    })
+  }
+  return cuts
+}
+
+export function cameraCutAt(cuts: CameraCut[], frame: number): CameraCut | undefined {
+  return sortCameraCuts(cuts).find((cut) => cut.frame === Math.round(frame))
+}
+
+/** 当前帧的节目机位：最后一个 frame <= 当前帧的切镜；没有切镜则用预览机位。 */
+export function activeCameraIdAt(
+  project: Pick<Project, 'cameras' | 'timeline' | 'ui'>,
+  frame: number,
+): string | null {
+  const cameraIds = new Set(project.cameras.map((camera) => camera.id))
+  const target = Math.max(0, Math.round(frame))
+  let active: string | null = null
+  for (const cut of sortCameraCuts(project.timeline.cameraCuts ?? [])) {
+    if (cut.frame > target) break
+    if (cameraIds.has(cut.cameraId)) active = cut.cameraId
+  }
+  if (active) return active
+  const preview = project.ui.preview
+  if (preview.cameraId && cameraIds.has(preview.cameraId)) return preview.cameraId
+  const slot = preview.cameraIds.find((id) => cameraIds.has(id))
+  if (slot) return slot
+  return project.cameras[0]?.id ?? null
+}
 
 function copyVec(value: Vec3): Vec3 {
   return { x: value.x, y: value.y, z: value.z }

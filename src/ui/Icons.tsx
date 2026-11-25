@@ -78,6 +78,13 @@ export const IconTrash = (p: IconProps) => (
     <path d="M4 7h16M9.5 7V4h5v3M6 7l1 13h10l1-13" />
   </Svg>
 )
+export const IconScissors = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="6" cy="7" r="2.4" />
+    <circle cx="6" cy="17" r="2.4" />
+    <path d="m8.1 8.1 11.9 11.8M8.1 15.9 20 4.1" />
+  </Svg>
+)
 export const IconSave = (p: IconProps) => (
   <Svg {...p}>
     <path d="M5 3.5h11l3.5 3.5V20.5H5z" />

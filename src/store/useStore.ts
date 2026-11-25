@@ -38,6 +38,10 @@ import {
   captureTimelineSnapshot,
   sampleTimeline,
   DEFAULT_TIMELINE_FRAMES,
+  activeCameraIdAt,
+  cameraCutAt,
+  normalizeCameraCuts,
+  sortCameraCuts,
 } from '../core/timeline'
 import {
   characterJson,
@@ -167,6 +171,8 @@ interface AppState {
   setAgentStatus: (status: 'idle' | 'connecting' | 'online' | 'offline') => void
   setAiConfig: (config: AiConfig) => Promise<void>
   setPlayhead: (frame: number) => void
+  setProgramCamera: (cameraId: string, frame?: number) => void
+  removeCameraCut: (frame?: number) => void
   setPlaying: (playing: boolean) => void
   togglePlay: () => void
   stepFrames: (delta: number) => void
@@ -224,6 +230,15 @@ function writeKeyframe(project: Project, frame: number): number {
 function applyTimelineAt(project: Project, frame: number): void {
   const snapshot = sampleTimeline(project.timeline.keyframes, timelineFrame(project, frame))
   if (snapshot) applyTimelineSnapshot(project, snapshot)
+}
+
+/** 单画面预览跟随节目切镜；分屏布局保留每格自己的机位。 */
+function syncProgramPreview(project: Project, frame: number): void {
+  if (project.ui.preview.layout !== 'single') return
+  const cameraId = activeCameraIdAt(project, frame)
+  if (!cameraId) return
+  project.ui.preview.cameraId = cameraId
+  project.ui.preview.cameraIds = [cameraId]
 }
 
 function cloneProject(project: Project): Project {
@@ -463,6 +478,7 @@ export const useStore = create<AppState>()(
           s.redoStack = []
           s.historyKey = ''
           applyTimelineAt(project, 0)
+          syncProgramPreview(project, 0)
         })
         if (missingBackgroundAsset) {
           get().toast('背景资源缺失，已恢复纯色背景', 'error')
@@ -517,6 +533,7 @@ export const useStore = create<AppState>()(
           s.redoStack = []
           s.historyKey = ''
           applyTimelineAt(project, 0)
+          syncProgramPreview(project, 0)
         })
         get().toast('工程已导入', 'success')
         await get().refreshHistory()
@@ -617,6 +634,12 @@ export const useStore = create<AppState>()(
         project.cameras = project.cameras.filter((c) => c.id !== id)
         const fallback = project.cameras[0]?.id ?? null
         const remaining = project.cameras.map((camera) => camera.id)
+        project.timeline.cameraCuts = normalizeCameraCuts(
+          project.timeline.cameraCuts.filter((cut) => cut.cameraId !== id),
+          remaining,
+          project.timeline.durationFrames,
+          fallback,
+        )
         project.ui.preview.cameraIds = normalizeCameraSlots(
           project.ui.preview.layout,
           (project.ui.preview.cameraIds ?? []).filter((cameraId) => cameraId !== id),
@@ -1455,7 +1478,63 @@ export const useStore = create<AppState>()(
         if (!s.project) return
         s.playheadFrame = timelineFrame(s.project, frame)
         applyTimelineAt(s.project, s.playheadFrame)
+        syncProgramPreview(s.project, s.playheadFrame)
       })
+    },
+
+    setProgramCamera: (cameraId, frame) => {
+      const project = get().project
+      const camera = project?.cameras.find((item) => item.id === cameraId)
+      if (!project || !camera) return
+      get().checkpoint('camera-cut')
+      set((s) => {
+        if (!s.project) return
+        const targetFrame = timelineFrame(s.project, frame ?? s.playheadFrame)
+        const cuts = s.project.timeline.cameraCuts
+        const existing = cameraCutAt(cuts, targetFrame)
+        if (existing) {
+          existing.cameraId = cameraId
+        } else {
+          if (cuts.length === 0 && targetFrame > 0) {
+            const baseCamera = activeCameraIdAt(s.project, 0) ?? cameraId
+            cuts.push({ id: uid(), frame: 0, cameraId: baseCamera })
+          }
+          cuts.push({ id: uid(), frame: targetFrame, cameraId })
+        }
+        s.project.timeline.cameraCuts = sortCameraCuts(cuts)
+        s.selectedCameraId = cameraId
+        s.selectedObjectId = null
+        syncProgramPreview(s.project, s.playheadFrame)
+        s.dirty = true
+      })
+      get().toast(
+        `第 ${timelineFrame(project, frame ?? get().playheadFrame)} 帧切到「${camera.name}」`,
+        'success',
+      )
+    },
+
+    removeCameraCut: (frame) => {
+      const project = get().project
+      if (!project) return
+      const targetFrame = timelineFrame(project, frame ?? get().playheadFrame)
+      const existed = project.timeline.cameraCuts.some((cut) => cut.frame === targetFrame)
+      if (!existed) return
+      get().checkpoint('camera-cut')
+      set((s) => {
+        if (!s.project) return
+        s.project.timeline.cameraCuts = s.project.timeline.cameraCuts.filter(
+          (cut) => cut.frame !== targetFrame,
+        )
+        s.project.timeline.cameraCuts = normalizeCameraCuts(
+          s.project.timeline.cameraCuts,
+          s.project.cameras.map((camera) => camera.id),
+          s.project.timeline.durationFrames,
+          s.project.ui.preview.cameraId,
+        )
+        syncProgramPreview(s.project, s.playheadFrame)
+        s.dirty = true
+      })
+      get().toast(`已删除第 ${targetFrame} 帧切镜`, 'success')
     },
 
     setPlaying: (playing) => {
@@ -1515,7 +1594,14 @@ export const useStore = create<AppState>()(
         if (!s.project) return
         const value = Math.max(12, Math.min(3600, Math.round(frames) || DEFAULT_TIMELINE_FRAMES))
         s.project.timeline.durationFrames = value
+        s.project.timeline.cameraCuts = normalizeCameraCuts(
+          s.project.timeline.cameraCuts,
+          s.project.cameras.map((camera) => camera.id),
+          value,
+          s.project.ui.preview.cameraId,
+        )
         s.playheadFrame = Math.min(s.playheadFrame, value)
+        syncProgramPreview(s.project, s.playheadFrame)
         s.dirty = true
       })
     },

@@ -20,6 +20,7 @@ import {
   type FreePreviewGrid,
 } from '../core/preview'
 import { clamp } from '../core/math'
+import { activeCameraIdAt } from '../core/timeline'
 import { useStore } from '../store/useStore'
 import type { Engine } from '../engine/Engine'
 import { IconEyeOff, IconGrip, IconReset } from './Icons'
@@ -45,6 +46,7 @@ export function PreviewWindow({
   const preview = project.ui.preview
   const aspect = project.output.aspect
   const cameras = project.cameras
+  const playhead = useStore((s) => s.playheadFrame)
   const layout = normalizePreviewLayout(preview.layout)
   const free = normalizeFreePreviewGrid(preview.free)
   const slotCount = previewSlotCount(layout, free)
@@ -61,6 +63,11 @@ export function PreviewWindow({
     (preview.cameraId && cameras.some((c) => c.id === preview.cameraId)
       ? preview.cameraId
       : (cameras[0]?.id ?? ''))
+  const programCameraId =
+    layout === 'single'
+      ? (activeCameraIdAt(project, playhead) ?? previewCameraId)
+      : previewCameraId
+  const engineSlotIds = layout === 'single' ? (programCameraId ? [programCameraId] : []) : slotIds
   const cells = previewCells(layout, free)
 
   const [rect, setRect] = useState<Rect>({
@@ -125,10 +132,10 @@ export function PreviewWindow({
     return () => engine.unmountPreview()
   }, [engine])
 
-  // 分屏布局 / 每格机位同步到引擎
+  // 分屏布局 / 每格机位同步到引擎；单画面按节目切镜取当前帧机位
   useEffect(() => {
-    engine.setPreviewLayout(layout, slotIds, free)
-  }, [engine, layout, slotIds.join('|'), free.cols, free.rows, free.colSizes.join(','), free.rowSizes.join(',')])
+    engine.setPreviewLayout(layout, engineSlotIds, free)
+  }, [engine, layout, engineSlotIds.join('|'), free.cols, free.rows, free.colSizes.join(','), free.rowSizes.join(',')])
 
   // 按画幅计算画面区域尺寸（letterbox）
   useEffect(() => {
@@ -332,14 +339,11 @@ export function PreviewWindow({
         {layout === 'single' ? (
           <select
             className="preview-select"
-            value={previewCameraId}
+            value={programCameraId}
             disabled={cameras.length === 0}
-            title="切换预览机位"
+            title="节目机位：切换会在当前帧记录切镜，并同步到时间线"
             onChange={(e) => {
-              const id = e.target.value
-              const store = useStore.getState()
-              store.setPreview({ cameraId: id, cameraIds: [id] })
-              store.selectCamera(id)
+              useStore.getState().setProgramCamera(e.target.value)
             }}
           >
             {cameras.length === 0 ? <option value="">无机位</option> : null}

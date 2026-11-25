@@ -206,6 +206,13 @@ export interface Keyframe {
   snapshot: Record<string, unknown>
 }
 
+/** 节目切镜：从 frame 起，输出画面切换到 cameraId，直到下一个切点。 */
+export interface CameraCut {
+  id: string
+  frame: number
+  cameraId: string
+}
+
 export interface LensTemplate {
   id: string
   name: string
@@ -252,6 +259,11 @@ export interface Project {
   output: OutputSettings
   cameras: CameraConfig[]
   objects: SceneObject[]
-  timeline: { keyframes: Keyframe[]; durationFrames: number }
+  timeline: {
+    keyframes: Keyframe[]
+    durationFrames: number
+    /** 节目镜头切换点；按 frame 升序，当前帧取最后一个 frame <= 当前帧的切点。 */
+    cameraCuts: CameraCut[]
+  }
   ui: ProjectUi
 }
