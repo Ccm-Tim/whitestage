@@ -135,6 +135,7 @@ curl.exe -s http://127.0.0.1:8787/rpc -H "content-type: application/json" -H "x-
 | `timeline.list` | 关键帧列表 / 当前帧 / 播放状态 |
 | `timeline.addKeyframe` | 当前帧记录 / 更新关键帧 |
 | `timeline.removeKeyframe` | 删除 `{frame}`，省略则当前帧 |
+| `timeline.removeKeyframes` | 批量删除 `{frames}` 中的关键帧 |
 | `timeline.listCuts` | 节目切镜列表 |
 | `timeline.addCut` | 在 `{frame}`（省略当前帧）切到 `{cameraId}`（省略当前节目机位） |
 | `timeline.removeCut` | 删除 `{frame}` 的切镜，省略则当前帧 |
