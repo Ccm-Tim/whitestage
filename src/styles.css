@@ -1053,6 +1053,7 @@ button {
 .inspector {
   display: flex;
   flex-direction: column;
+  position: relative;
   min-height: 0;
   background: var(--panel);
   border-left: 1px solid var(--border);
@@ -2494,6 +2495,30 @@ button {
 .cc-watermark.start {
   right: 16px;
   bottom: 12px;
+}
+.cc-watermark.inspector {
+  position: static;
+  align-self: flex-end;
+  flex: 0 0 auto;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 4px;
+  padding: 0 10px 8px;
+  z-index: 2;
+  opacity: 0.34;
+  font-size: 8px;
+  white-space: nowrap;
+}
+.cc-watermark.inspector b {
+  font-size: 8.5px;
+}
+.cc-watermark.inspector b::after {
+  content: ' · ';
+  font-weight: 400;
+  color: rgba(205, 219, 237, 0.5);
+}
+.cc-watermark.inspector span + span::before {
+  content: '，';
 }
 .cc-watermark span {
   display: block;

@@ -51,7 +51,7 @@ export default function App() {
   return (
     <>
       {view === 'editor' && project ? <Editor /> : <StartScreen />}
-      <Watermark inEditor={view === 'editor' && !!project} />
+      {view === 'editor' && project ? null : <Watermark placement="start" />}
       <ToastHost />
     </>
   )

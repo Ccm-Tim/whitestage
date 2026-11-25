@@ -1,7 +1,11 @@
-export function Watermark({ inEditor }: { inEditor: boolean }) {
+export function Watermark({
+  placement = 'start',
+}: {
+  placement?: 'start' | 'inspector'
+}) {
   return (
     <div
-      className={`cc-watermark ${inEditor ? 'editor' : 'start'}`}
+      className={`cc-watermark ${placement}`}
       title="作者：CC菜 · 仅供分享学习使用，请勿商用"
       aria-label="CC菜，仅供分享学习使用，请勿商用"
     >

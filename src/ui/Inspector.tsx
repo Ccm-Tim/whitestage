@@ -16,6 +16,7 @@ import { IconCamera, IconPlus, IconTarget, IconTemplate, IconUpload } from './Ic
 import { Modal } from './Modal'
 import { BackgroundDialog } from './BackgroundDialog'
 import { ObjectInspector } from './ObjectInspector'
+import { Watermark } from './Watermark'
 
 const AUTOSAVE_OPTIONS = [1, 5, 10, 15, 30, 60]
 
@@ -1396,6 +1397,7 @@ export function Inspector() {
         onClose={closeBackgroundDialog}
         onConfirm={(kind) => void confirmBackground(kind)}
       />
+      <Watermark placement="inspector" />
     </aside>
   )
 }
