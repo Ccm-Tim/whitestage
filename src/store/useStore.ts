@@ -178,6 +178,7 @@ interface AppState {
   stepFrames: (delta: number) => void
   addKeyframe: () => void
   removeKeyframe: (frame?: number) => void
+  removeKeyframes: (frames: number[]) => void
   clearKeyframes: () => void
   setDurationFrames: (frames: number) => void
   setAutoKey: (value: boolean) => void
@@ -1576,6 +1577,22 @@ export const useStore = create<AppState>()(
         applyTimelineAt(s.project, s.playheadFrame)
       })
       get().toast('已删除该帧关键帧', 'success')
+    },
+
+    removeKeyframes: (frames) => {
+      const unique = [...new Set(frames.map((frame) => Math.round(frame)))]
+      if (unique.length === 0) return
+      const targets = new Set(unique)
+      get().checkpoint('keyframe')
+      set((s) => {
+        if (!s.project) return
+        s.project.timeline.keyframes = s.project.timeline.keyframes.filter(
+          (keyframe) => !targets.has(keyframe.frame),
+        )
+        s.dirty = true
+        applyTimelineAt(s.project, s.playheadFrame)
+      })
+      get().toast(`已删除 ${unique.length} 个关键帧`, 'success')
     },
 
     clearKeyframes: () => {
