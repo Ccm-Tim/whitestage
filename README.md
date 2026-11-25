@@ -4,6 +4,12 @@
 
 当前版本：**M6 完成版（本地版 v0.1）**：M2-C 多图背景板、M3 多机位分屏 / 自由布局 / 实时景深、M4 时间线、M5 WebM / MP4 / MOV / FLV / PNG 导出、M6 撤销 / 性能 / 发布打包、本地 Agent 与 AI 配置预留。验收记录见 [ACCEPTANCE.md](ACCEPTANCE.md)。
 
+## 使用说明书
+
+- [图文使用说明书 PDF](docs/WhiteStage_使用说明书_v0.1.pdf)
+- [图文使用说明书 Word](docs/WhiteStage_使用说明书_v0.1.docx)
+- [GitHub Releases 下载](https://github.com/Ccm-Tim/whitestage/releases/latest)
+
 ---
 
 ## 快速开始
