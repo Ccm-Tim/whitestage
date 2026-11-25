@@ -6,8 +6,8 @@
 
 ## 使用说明书
 
-- [图文使用说明书 PDF](docs/WhiteStage_使用说明书_v0.1.2.pdf)
-- [图文使用说明书 Word](docs/WhiteStage_使用说明书_v0.1.2.docx)
+- [图文使用说明书 PDF](docs/WhiteStage_使用说明书_v0.1.3.pdf)
+- [图文使用说明书 Word](docs/WhiteStage_使用说明书_v0.1.3.docx)
 - [GitHub Releases 下载](https://github.com/Ccm-Tim/whitestage/releases/latest)
 
 ---
@@ -52,8 +52,8 @@ npm run package:portable
 会先清理并重建 `dist/`，然后生成：
 
 - `release/WhiteStage/`：可直接运行的发布目录，不需要 `npm install` / Vite；
-- `release/WhiteStage-v0.1.2.zip`：标准版（需要 Node.js）；
-- `release/WhiteStage-v0.1.2-portable.zip`：便携版（内置 Node.js 运行时）。
+- `release/WhiteStage-v0.1.3.zip`：标准版（需要 Node.js）；
+- `release/WhiteStage-v0.1.3-portable.zip`：便携版（内置 Node.js 运行时）。
 
 下载已构建版本：
 
