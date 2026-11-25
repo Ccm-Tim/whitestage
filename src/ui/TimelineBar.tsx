@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import {
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 import { useStore } from '../store/useStore'
 import { activeCameraIdAt, cameraCutAt } from '../core/timeline'
 import { IconChevron, IconPause, IconPin, IconPlay, IconScissors, IconTrash } from './Icons'
@@ -30,12 +36,16 @@ export function TimelineBar() {
   const stepFrames = useStore((s) => s.stepFrames)
   const addKeyframe = useStore((s) => s.addKeyframe)
   const removeKeyframe = useStore((s) => s.removeKeyframe)
+  const removeKeyframes = useStore((s) => s.removeKeyframes)
+  const clearKeyframes = useStore((s) => s.clearKeyframes)
   const setProgramCamera = useStore((s) => s.setProgramCamera)
   const removeCameraCut = useStore((s) => s.removeCameraCut)
   const setDurationFrames = useStore((s) => s.setDurationFrames)
   const setAutoKey = useStore((s) => s.setAutoKey)
   const [snap, setSnap] = useState(true)
   const [cutCamera, setCutCamera] = useState('')
+  const [selectedFrames, setSelectedFrames] = useState<Set<number>>(() => new Set())
+  const selectionAnchorRef = useRef<number | null>(null)
   const trackRef = useRef<HTMLDivElement>(null)
   const draggingRef = useRef(false)
 
@@ -53,6 +63,14 @@ export function TimelineBar() {
     if (!project) return
     setCutCamera(programCameraId)
   }, [project, playhead, programCameraId])
+
+  useEffect(() => {
+    const available = new Set(keyframes.map((keyframe) => keyframe.frame))
+    setSelectedFrames((previous) => {
+      const next = new Set([...previous].filter((frame) => available.has(frame)))
+      return next.size === previous.size ? previous : next
+    })
+  }, [keyframes])
 
   useEffect(() => {
     if (!playing) return
@@ -92,11 +110,21 @@ export function TimelineBar() {
       if (event.code === 'Space') {
         event.preventDefault()
         togglePlay()
+        return
+      }
+      if (event.key === 'Escape') {
+        setSelectedFrames(new Set())
+        return
+      }
+      if ((event.key === 'Delete' || event.key === 'Backspace') && selectedFrames.size > 0) {
+        event.preventDefault()
+        removeKeyframes([...selectedFrames])
+        setSelectedFrames(new Set())
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [togglePlay])
+  }, [togglePlay, selectedFrames, removeKeyframes])
 
   if (!project) return null
 
@@ -115,9 +143,57 @@ export function TimelineBar() {
 
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return
+    setSelectedFrames(new Set())
+    selectionAnchorRef.current = null
     draggingRef.current = true
     event.currentTarget.setPointerCapture(event.pointerId)
     seekAt(event.clientX)
+  }
+
+  const selectKeyframe = (event: ReactMouseEvent<HTMLButtonElement>, frame: number) => {
+    event.stopPropagation()
+    setPlaying(false)
+    const additive = event.ctrlKey || event.metaKey
+    const range = event.shiftKey
+    if (range) {
+      const anchor = selectionAnchorRef.current ?? frame
+      const start = Math.min(anchor, frame)
+      const end = Math.max(anchor, frame)
+      const next = new Set(selectedFrames)
+      for (const keyframe of keyframes) {
+        if (keyframe.frame >= start && keyframe.frame <= end) next.add(keyframe.frame)
+      }
+      setSelectedFrames(next)
+    } else if (additive) {
+      const next = new Set(selectedFrames)
+      if (next.has(frame)) next.delete(frame)
+      else next.add(frame)
+      setSelectedFrames(next)
+      selectionAnchorRef.current = frame
+    } else {
+      setSelectedFrames(new Set([frame]))
+      selectionAnchorRef.current = frame
+    }
+    setPlayhead(frame)
+  }
+
+  const deleteCount =
+    selectedFrames.size > 0 ? selectedFrames.size : currentHasKey ? 1 : 0
+
+  const deleteKeyframes = () => {
+    if (selectedFrames.size > 0) {
+      removeKeyframes([...selectedFrames])
+      setSelectedFrames(new Set())
+      return
+    }
+    if (currentHasKey) removeKeyframe()
+  }
+
+  const clearAllKeyframes = () => {
+    if (keyframes.length === 0) return
+    clearKeyframes()
+    setSelectedFrames(new Set())
+    selectionAnchorRef.current = null
   }
 
   const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -241,25 +317,23 @@ export function TimelineBar() {
         {keyframes.map((keyframe) => (
           <button
             key={keyframe.frame}
-            className={`tl-kf ${keyframe.frame === playhead ? 'active' : ''}`}
+            className={`tl-kf ${keyframe.frame === playhead ? 'active' : ''} ${
+              selectedFrames.has(keyframe.frame) ? 'selected' : ''
+            }`}
             style={{
               left: `calc(${(keyframe.frame / Math.max(1, duration)) * 100}% + ${
                 10 - (keyframe.frame / Math.max(1, duration)) * 20
               }px)`,
             }}
-            title={`关键帧 ${keyframe.frame}`}
+            title={`关键帧 ${keyframe.frame} · Ctrl 点击多选 · Shift 点击范围选择`}
             onPointerDown={(event) => event.stopPropagation()}
-            onClick={(event) => {
-              event.stopPropagation()
-              setPlaying(false)
-              setPlayhead(keyframe.frame)
-            }}
+            onClick={(event) => selectKeyframe(event, keyframe.frame)}
           >
             <IconPin size={11} />
           </button>
         ))}
         {keyframes.length === 0 ? (
-          <span className="tl-empty">图钉记关键帧 · 剪刀切镜 · 空格播放</span>
+          <span className="tl-empty">图钉记关键帧 · Ctrl/Shift 多选 · 剪刀切镜</span>
         ) : null}
       </div>
 
@@ -320,11 +394,26 @@ export function TimelineBar() {
         </button>
         <button
           className="icon-btn sm"
-          title="删除当前帧关键帧"
-          disabled={!currentHasKey}
-          onClick={() => removeKeyframe()}
+          title={
+            selectedFrames.size > 0
+              ? `删除选中的 ${selectedFrames.size} 个关键帧`
+              : '删除当前帧关键帧'
+          }
+          disabled={deleteCount === 0}
+          onClick={deleteKeyframes}
         >
           <IconTrash size={13} />
+        </button>
+        {selectedFrames.size > 0 ? (
+          <span className="tl-selected">已选 {selectedFrames.size}</span>
+        ) : null}
+        <button
+          className="tl-chip tl-clear-all"
+          title="一键清空所有关键帧（可撤销，不影响切镜）"
+          disabled={keyframes.length === 0}
+          onClick={clearAllKeyframes}
+        >
+          清空全部
         </button>
         <span className="tl-count">{keyframes.length} 关键帧 · {cuts.length} 切镜</span>
         <label className="tl-duration" title="时间线长度（帧）">
@@ -338,7 +427,7 @@ export function TimelineBar() {
           />
         </label>
         <span className="tl-dot">·</span>
-        <span>{fps} fps</span>
+        <span className="tl-fps">{fps} fps</span>
       </div>
     </footer>
   )
