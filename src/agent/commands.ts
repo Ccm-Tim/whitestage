@@ -56,6 +56,7 @@ export const AGENT_COMMANDS = [
   { method: 'timeline.list', description: '列出时间线关键帧与切镜' },
   { method: 'timeline.addKeyframe', description: '在当前帧记录 / 更新关键帧' },
   { method: 'timeline.removeKeyframe', params: { frame: 'number?' } },
+  { method: 'timeline.removeKeyframes', params: { frames: 'number[]' } },
   { method: 'timeline.listCuts', description: '列出节目切镜' },
   { method: 'timeline.addCut', params: { cameraId: 'string?', frame: 'number?' } },
   { method: 'timeline.removeCut', params: { frame: 'number?' } },
@@ -363,6 +364,14 @@ export async function executeAgentCommand(method: string, params: Params = {}): 
     case 'timeline.removeKeyframe':
       state().removeKeyframe(typeof params.frame === 'number' ? params.frame : undefined)
       return { frames: project().timeline.keyframes.map((keyframe) => keyframe.frame) }
+
+    case 'timeline.removeKeyframes': {
+      const frames = Array.isArray(params.frames)
+        ? (params.frames as unknown[]).map(Number).filter((frame) => Number.isFinite(frame))
+        : []
+      state().removeKeyframes(frames)
+      return { frames: project().timeline.keyframes.map((keyframe) => keyframe.frame) }
+    }
 
     case 'timeline.setPlayhead':
       state().setPlayhead(Number(params.frame) || 0)
