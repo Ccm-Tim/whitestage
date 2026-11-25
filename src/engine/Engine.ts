@@ -29,6 +29,21 @@ import { buildObjectModel, disposeObject3D, objectVisualSignature } from './mode
 
 const HELPER_LAYER = 1
 
+/** WebGLRenderTarget 的输出是线性色；写回 2D canvas / PNG / 视频前必须转成 sRGB。 */
+const LINEAR_TO_SRGB = Uint8Array.from({ length: 256 }, (_, value) => {
+  const c = value / 255
+  const encoded = c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055
+  return Math.round(Math.min(1, Math.max(0, encoded)) * 255)
+})
+
+function linearBufferToSrgb(buffer: Uint8Array): void {
+  for (let i = 0; i < buffer.length; i += 4) {
+    buffer[i] = LINEAR_TO_SRGB[buffer[i]]
+    buffer[i + 1] = LINEAR_TO_SRGB[buffer[i + 1]]
+    buffer[i + 2] = LINEAR_TO_SRGB[buffer[i + 2]]
+  }
+}
+
 const PART_ORDER = [
   'head',
   'neck',
@@ -1696,6 +1711,7 @@ export class Engine {
     this.renderWithBackground(renderer, camera, width / Math.max(1, height))
     const buffer = new Uint8Array(width * height * 4)
     renderer.readRenderTargetPixels(target, 0, 0, width, height, buffer)
+    linearBufferToSrgb(buffer)
     renderer.setRenderTarget(previousTarget)
     this.transformHelper.visible = gizmoVisible
     target.dispose()
@@ -1776,6 +1792,7 @@ export class Engine {
 
     const buffer = new Uint8Array(width * height * 4)
     renderer.readRenderTargetPixels(target, 0, 0, width, height, buffer)
+    linearBufferToSrgb(buffer)
     target.dispose()
 
     const canvas = document.createElement('canvas')
