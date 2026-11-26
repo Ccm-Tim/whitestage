@@ -120,7 +120,7 @@ export interface StageSettings {
 }
 
 /** 导入的真实 3D 环境；GLB 是网格，PLY / SPLAT 先以点云近似预览。 */
-export type EnvironmentKind = 'none' | 'glb' | 'ply' | 'splat'
+export type EnvironmentKind = 'none' | 'glb' | 'ply' | 'splat' | 'spz'
 
 export interface EnvironmentConfig {
   kind: EnvironmentKind
@@ -146,6 +146,12 @@ export interface EnvironmentConfig {
     size: number
     color: string
     opacity: number
+  }
+  /** 3DGS / Splat 渲染预算 */
+  gaussian: {
+    lod: boolean
+    /** 目标 splat 数，Spark LoD 会按此预算动态降级 */
+    budget: number
   }
 }
 
