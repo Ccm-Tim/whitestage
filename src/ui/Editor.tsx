@@ -43,6 +43,8 @@ export function Editor() {
         onCameraChange: (id, patch) => useStore.getState().patchCamera(id, patch),
         onObjectChange: (id, patch) => useStore.getState().patchObject(id, patch),
         onPickTarget: (target) => useStore.getState().completeTargetPick(target),
+        onEnvironmentError: (message) =>
+          useStore.getState().toast(`3D 环境加载失败：${message}`, 'error'),
       })
     } catch (err) {
       setEngineError(errorMessage(err))
