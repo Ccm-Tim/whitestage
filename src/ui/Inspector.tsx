@@ -42,6 +42,7 @@ export function Inspector() {
   const setAutosaveMinutes = useStore((s) => s.setAutosaveMinutes)
   const exportProject = useStore((s) => s.exportProject)
   const importEnvironment = useStore((s) => s.importEnvironment)
+  const reloadEnvironment = useStore((s) => s.reloadEnvironment)
   const updateEnvironment = useStore((s) => s.updateEnvironment)
   const removeEnvironment = useStore((s) => s.removeEnvironment)
   const patchObject = useStore((s) => s.patchObject)
@@ -683,16 +684,18 @@ export function Inspector() {
                   {project.environment.kind === 'glb'
                     ? 'GLB 网格'
                     : project.environment.kind === 'ply'
-                      ? 'PLY 点云'
+                      ? 'PLY 3DGS'
                       : project.environment.kind === 'splat'
-                        ? 'SPLAT 点云'
-                        : '未导入'}
+                        ? 'SPLAT 3DGS'
+                        : project.environment.kind === 'spz'
+                          ? 'SPZ 3DGS'
+                          : '未导入'}
                 </span>
               }
             >
               <p className="note">
-                导入真实 3D 场景，让人偶和机位进入环境。GLB 是真网格；PLY / SPLAT 先按点云近似预览，
-                用于快速对位，最终质量取决于重建资产。混合场景建议：3D 环境负责近中景，
+                导入真实 3D 场景，让人偶和机位进入环境。GLB 是真网格；PLY / SPLAT / SPZ 由 Spark
+                做真实 Gaussian Splatting 渲染，并按预算自动 LOD。混合场景建议：3D 环境负责近中景，
                 360 全景放在「背景」里做远景/补洞，再用地面代理补脚底。
               </p>
               <div className="bg-actions">
@@ -705,11 +708,16 @@ export function Inspector() {
                     移除环境
                   </button>
                 ) : null}
+                {project.environment.kind !== 'none' ? (
+                  <button className="mini-btn" onClick={() => void reloadEnvironment()}>
+                    重新加载
+                  </button>
+                ) : null}
               </div>
               <input
                 ref={envFileRef}
                 type="file"
-                accept=".glb,.ply,.splat"
+                accept=".glb,.ply,.splat,.spz"
                 style={{ display: 'none' }}
                 onChange={async (event) => {
                   const file = event.target.files?.[0]
@@ -842,6 +850,45 @@ export function Inspector() {
                       />
                     </>
                   ) : null}
+                  {project.environment.kind === 'ply' ||
+                  project.environment.kind === 'splat' ||
+                  project.environment.kind === 'spz' ? (
+                    <>
+                      <Toggle
+                        label="3DGS 预算优化"
+                        hint="按预算抽稀/限制 splat 数量，控制显存"
+                        checked={project.environment.gaussian.lod}
+                        onChange={() =>
+                          updateEnvironment({
+                            gaussian: {
+                              ...project.environment.gaussian,
+                              lod: !project.environment.gaussian.lod,
+                            },
+                          })
+                        }
+                      />
+                      <Field label="Splat 预算" hint="选好预算后点「重新加载」生效；越小越省显存">
+                        <select
+                          className="select"
+                          value={project.environment.gaussian.budget}
+                          onChange={(event) =>
+                            updateEnvironment({
+                              gaussian: {
+                                ...project.environment.gaussian,
+                                budget: Number(event.target.value),
+                              },
+                            })
+                          }
+                        >
+                          <option value={250000}>25 万 · 低配</option>
+                          <option value={500000}>50 万 · 笔记本</option>
+                          <option value={1000000}>100 万 · 默认</option>
+                          <option value={2000000}>200 万 · 高质量</option>
+                          <option value={4000000}>400 万 · 高端</option>
+                        </select>
+                      </Field>
+                    </>
+                  ) : null}
                   <div className="bg-actions">
                     <button
                       className="mini-btn"
@@ -862,7 +909,7 @@ export function Inspector() {
                   </p>
                 </>
               ) : (
-                <p className="note">支持 `.glb` / `.ply` / `.splat`。GLB 会真实遮挡人偶，点云为快速近似。</p>
+                <p className="note">支持 `.glb` / `.ply` / `.splat` / `.spz`。GLB 是网格；其余由 Spark 做 3DGS 渲染。</p>
               )}
             </Section>
 
