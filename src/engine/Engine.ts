@@ -381,6 +381,7 @@ export class Engine {
   private environmentKey = ''
   private environmentLoadToken = 0
   private environmentContactShadows = true
+  private groundProxy: THREE.Mesh
   private outputWidth = 1920
   private outputHeight = 1080
   private hemi: THREE.HemisphereLight
@@ -485,6 +486,23 @@ export class Engine {
 
     this.environmentGroup.name = 'WhiteStageEnvironment'
     this.scene.add(this.environmentGroup)
+
+    this.groundProxy = new THREE.Mesh(
+      new THREE.CircleGeometry(1, 96),
+      new THREE.MeshStandardMaterial({
+        color: '#30343a',
+        roughness: 1,
+        metalness: 0,
+        transparent: true,
+        opacity: 0.72,
+        depthWrite: true,
+      }),
+    )
+    this.groundProxy.rotation.x = -Math.PI / 2
+    this.groundProxy.position.y = 0.006
+    this.groundProxy.receiveShadow = true
+    this.groundProxy.visible = false
+    this.scene.add(this.groundProxy)
 
     this.shadowCatcher = new THREE.Mesh(
       new THREE.CircleGeometry(12, 72),
@@ -1576,7 +1594,15 @@ export class Engine {
       }
     })
     this.environmentContactShadows = env.contactShadows
-    this.shadowCatcher.visible = this.stageShadows && env.contactShadows
+    const groundActive = env.kind !== 'none' && env.visible && env.ground.enabled
+    this.groundProxy.visible = groundActive
+    this.groundProxy.scale.setScalar(env.ground.size)
+    const groundMaterial = this.groundProxy.material as THREE.MeshStandardMaterial
+    groundMaterial.color.set(env.ground.color)
+    groundMaterial.opacity = env.ground.opacity
+    groundMaterial.transparent = env.ground.opacity < 1
+    this.groundProxy.receiveShadow = env.contactShadows
+    this.shadowCatcher.visible = this.stageShadows && env.contactShadows && !groundActive
   }
 
   private clearEnvironment() {
@@ -2068,6 +2094,7 @@ export class Engine {
     const previousGround = this.ground.visible
     const previousShadowCatcher = this.shadowCatcher.visible
     const previousEnvironment = this.environmentGroup.visible
+    const previousGroundProxy = this.groundProxy.visible
     const previousTransformHelper = this.transformHelper.visible
     const cameraVisibility = Array.from(this.rigs.values()).map((item) => ({
       item,
@@ -2099,6 +2126,7 @@ export class Engine {
       this.ground.visible = false
       this.shadowCatcher.visible = false
       this.environmentGroup.visible = false
+      this.groundProxy.visible = false
       this.transformHelper.visible = false
       for (const entry of cameraVisibility) {
         entry.item.root.visible = false
@@ -2154,6 +2182,7 @@ export class Engine {
       this.ground.visible = previousGround
       this.shadowCatcher.visible = previousShadowCatcher
       this.environmentGroup.visible = previousEnvironment
+      this.groundProxy.visible = previousGroundProxy
       this.transformHelper.visible = previousTransformHelper
       for (const entry of cameraVisibility) {
         entry.item.root.visible = entry.root
@@ -2262,6 +2291,8 @@ export class Engine {
     ;(this.bgPlane.material as THREE.Material).dispose()
     this.removePlaneMesh()
     this.clearEnvironment()
+    this.groundProxy.geometry.dispose()
+    ;(this.groundProxy.material as THREE.Material).dispose()
     this.originHelper.traverse((o) => {
       const mesh = o as THREE.Mesh
       if (mesh.geometry) mesh.geometry.dispose()
