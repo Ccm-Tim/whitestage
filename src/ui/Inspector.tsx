@@ -692,7 +692,8 @@ export function Inspector() {
             >
               <p className="note">
                 导入真实 3D 场景，让人偶和机位进入环境。GLB 是真网格；PLY / SPLAT 先按点云近似预览，
-                用于快速对位，最终质量取决于重建资产。
+                用于快速对位，最终质量取决于重建资产。混合场景建议：3D 环境负责近中景，
+                360 全景放在「背景」里做远景/补洞，再用地面代理补脚底。
               </p>
               <div className="bg-actions">
                 <button className="mini-btn" onClick={() => envFileRef.current?.click()}>
@@ -785,6 +786,62 @@ export function Inspector() {
                       updateEnvironment({ contactShadows: !project.environment.contactShadows })
                     }
                   />
+                  <Toggle
+                    label="地面代理"
+                    hint="补 3DGS/点云底部空洞，负责脚底接地"
+                    checked={project.environment.ground.enabled}
+                    onChange={() =>
+                      updateEnvironment({
+                        ground: {
+                          ...project.environment.ground,
+                          enabled: !project.environment.ground.enabled,
+                        },
+                      })
+                    }
+                  />
+                  {project.environment.ground.enabled ? (
+                    <>
+                      <SliderField
+                        label="地面代理尺寸"
+                        min={5}
+                        max={200}
+                        step={1}
+                        value={project.environment.ground.size}
+                        unit="m"
+                        onChange={(value) =>
+                          updateEnvironment({
+                            ground: { ...project.environment.ground, size: value },
+                          })
+                        }
+                      />
+                      <Field label="地面颜色">
+                        <input
+                          type="color"
+                          value={project.environment.ground.color}
+                          onChange={(event) =>
+                            updateEnvironment({
+                              ground: {
+                                ...project.environment.ground,
+                                color: event.target.value,
+                              },
+                            })
+                          }
+                        />
+                      </Field>
+                      <SliderField
+                        label="地面不透明度"
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        value={project.environment.ground.opacity}
+                        onChange={(value) =>
+                          updateEnvironment({
+                            ground: { ...project.environment.ground, opacity: value },
+                          })
+                        }
+                      />
+                    </>
+                  ) : null}
                   <div className="bg-actions">
                     <button
                       className="mini-btn"
