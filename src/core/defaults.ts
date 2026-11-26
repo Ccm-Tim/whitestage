@@ -115,7 +115,7 @@ export function targetLabel(
 
 export function normalizeEnvironment(input?: Partial<EnvironmentConfig>): EnvironmentConfig {
   const kind: EnvironmentConfig['kind'] =
-    input?.kind === 'glb' || input?.kind === 'ply' || input?.kind === 'splat'
+    input?.kind === 'glb' || input?.kind === 'ply' || input?.kind === 'splat' || input?.kind === 'spz'
       ? input.kind
       : 'none'
   const scale = Number(input?.scale)
@@ -123,6 +123,7 @@ export function normalizeEnvironment(input?: Partial<EnvironmentConfig>): Enviro
   const opacity = Number(input?.opacity)
   const groundSize = Number(input?.ground?.size)
   const groundOpacity = Number(input?.ground?.opacity)
+  const gaussianBudget = Number(input?.gaussian?.budget)
   return {
     kind,
     assetId: kind !== 'none' && typeof input?.assetId === 'string' && input.assetId ? input.assetId : null,
@@ -148,6 +149,12 @@ export function normalizeEnvironment(input?: Partial<EnvironmentConfig>): Enviro
       opacity: Number.isFinite(groundOpacity)
         ? Math.min(1, Math.max(0, groundOpacity))
         : 0.72,
+    },
+    gaussian: {
+      lod: input?.gaussian?.lod !== false,
+      budget: Number.isFinite(gaussianBudget)
+        ? Math.min(4_000_000, Math.max(50_000, Math.round(gaussianBudget)))
+        : 1_000_000,
     },
   }
 }
