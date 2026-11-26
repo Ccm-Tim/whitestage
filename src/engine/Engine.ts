@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { TransformControls } from 'three/addons/controls/TransformControls.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
-import { PLYLoader } from 'three/addons/loaders/PLYLoader.js'
+import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark'
 import { strToU8, zipSync } from 'fflate'
 import type {
   BackgroundConfig,
@@ -47,28 +47,21 @@ function linearBufferToSrgb(buffer: Uint8Array): void {
   }
 }
 
-/** .splat（Antimatter15 格式）每 32 字节：位置 3f、缩放 3f、颜色 4u8、旋转 4u8。先按点云预览。 */
-function parseSplatGeometry(buffer: ArrayBuffer): THREE.BufferGeometry | null {
+/** .splat（Antimatter15 格式）每 32 字节：位置 3f、缩放 3f、颜色 4u8、旋转 4u8。 */
+function downsampleSplatBytes(buffer: ArrayBuffer, budget: number): Uint8Array {
   const stride = 32
-  const count = Math.floor(buffer.byteLength / stride)
-  if (count <= 0) return null
-  const view = new DataView(buffer)
-  const positions = new Float32Array(count * 3)
-  const colors = new Uint8Array(count * 3)
-  for (let i = 0; i < count; i += 1) {
-    const offset = i * stride
-    positions[i * 3] = view.getFloat32(offset, true)
-    positions[i * 3 + 1] = view.getFloat32(offset + 4, true)
-    positions[i * 3 + 2] = view.getFloat32(offset + 8, true)
-    colors[i * 3] = view.getUint8(offset + 24)
-    colors[i * 3 + 1] = view.getUint8(offset + 25)
-    colors[i * 3 + 2] = view.getUint8(offset + 26)
+  const source = new Uint8Array(buffer)
+  const count = Math.floor(source.byteLength / stride)
+  if (count <= budget) return source
+  const step = Math.max(1, Math.ceil(count / Math.max(1, budget)))
+  const kept = Math.ceil(count / step)
+  const result = new Uint8Array(kept * stride)
+  for (let index = 0, sourceIndex = 0; sourceIndex < count; sourceIndex += step, index += 1) {
+    result.set(source.subarray(sourceIndex * stride, sourceIndex * stride + stride), index * stride)
   }
-  const geometry = new THREE.BufferGeometry()
-  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3, true))
-  return geometry
+  return result
 }
+
 
 const PART_ORDER = [
   'head',
@@ -382,6 +375,8 @@ export class Engine {
   private environmentLoadToken = 0
   private environmentContactShadows = true
   private groundProxy: THREE.Mesh
+  private spark: SparkRenderer
+  private environmentSplat: SplatMesh | null = null
   private outputWidth = 1920
   private outputHeight = 1080
   private hemi: THREE.HemisphereLight
@@ -441,6 +436,16 @@ export class Engine {
     this.scene.background = new THREE.Color('#eef0f2')
     this.fog = new THREE.Fog('#eef0f2', 45, 170)
     this.scene.fog = this.fog
+
+    this.spark = new SparkRenderer({
+      renderer: this.renderer,
+      enableLod: true,
+      lodSplatCount: 1_000_000,
+      depthTest: true,
+      transparent: true,
+    })
+    this.spark.name = 'WhiteStageSpark'
+    this.scene.add(this.spark)
 
     this.bgScene = new THREE.Scene()
     this.bgCamera = new THREE.OrthographicCamera(-0.5, 0.5, 0.5, -0.5, 0, 10)
@@ -1594,6 +1599,12 @@ export class Engine {
       }
     })
     this.environmentContactShadows = env.contactShadows
+    this.spark.enableLod = env.gaussian.lod
+    this.spark.lodSplatCount = Math.max(50_000, env.gaussian.budget)
+    if (this.environmentSplat) {
+      this.environmentSplat.opacity = env.opacity
+      this.environmentSplat.visible = env.visible
+    }
     const groundActive = env.kind !== 'none' && env.visible && env.ground.enabled
     this.groundProxy.visible = groundActive
     this.groundProxy.scale.setScalar(env.ground.size)
@@ -1606,6 +1617,10 @@ export class Engine {
   }
 
   private clearEnvironment() {
+    if (this.environmentSplat) {
+      this.environmentSplat.dispose()
+      this.environmentSplat = null
+    }
     for (const child of [...this.environmentGroup.children]) {
       this.environmentGroup.remove(child)
       child.traverse((object) => {
@@ -1649,40 +1664,28 @@ export class Engine {
         const gltf = await new GLTFLoader().parseAsync(buffer, '')
         if (token !== this.environmentLoadToken) return
         group.add(gltf.scene)
-      } else if (env.kind === 'ply') {
-        const geometry = new PLYLoader().parse(buffer)
-        if (!geometry.getAttribute('position')) throw new Error('PLY 没有顶点数据')
-        const hasColor = !!geometry.getAttribute('color')
-        const points = new THREE.Points(
-          geometry,
-          new THREE.PointsMaterial({
-            size: 0.018,
-            sizeAttenuation: true,
-            vertexColors: hasColor,
-            color: hasColor ? 0xffffff : 0xbfc8d4,
-            transparent: true,
-            depthWrite: true,
-          }),
-        )
-        group.add(points)
-      } else if (env.kind === 'splat') {
-        const geometry = parseSplatGeometry(buffer)
-        if (!geometry) throw new Error('SPLAT 数据为空')
-        const points = new THREE.Points(
-          geometry,
-          new THREE.PointsMaterial({
-            size: 0.018,
-            sizeAttenuation: true,
-            vertexColors: true,
-            transparent: true,
-            depthWrite: true,
-          }),
-        )
-        group.add(points)
+      } else if (env.kind === 'ply' || env.kind === 'splat' || env.kind === 'spz') {
+        const fileBytes =
+          env.kind === 'splat' && env.gaussian.lod
+            ? downsampleSplatBytes(buffer, env.gaussian.budget)
+            : new Uint8Array(buffer)
+        const splat = new SplatMesh({
+          fileBytes,
+          fileName: env.name,
+          lod: false,
+          enableLod: false,
+        })
+        await splat.initialized
+        if (token !== this.environmentLoadToken) {
+          splat.dispose()
+          return
+        }
+        group.add(splat)
       }
       if (token !== this.environmentLoadToken) return
       this.clearEnvironment()
       this.environmentGroup.add(group)
+      this.environmentSplat = group.children.find((child) => child instanceof SplatMesh) ?? null
       this.applyEnvironmentTransform(env)
     } catch (err) {
       console.error('3D 环境加载失败', err)
@@ -1865,7 +1868,7 @@ export class Engine {
   renderCameraFrame(cameraId: string, width: number, height: number): HTMLCanvasElement | null {
     const rig = this.rigs.get(cameraId)
     if (!rig) return null
-    const renderer = this.preview?.renderer ?? this.renderer
+    const renderer = this.renderer
     const target = new THREE.WebGLRenderTarget(width, height, { samples: 4 })
     const camera = new THREE.PerspectiveCamera(
       rig.camera.fov,
@@ -1914,6 +1917,7 @@ export class Engine {
     const preview = this.preview
     const rig = this.rigs.get(cameraId)
     if (!preview || !rig || !rig.dof) return this.renderCameraFrame(cameraId, width, height)
+    if (this.environmentSplat) return this.renderCameraFrame(cameraId, width, height)
     const oldWidth = preview.canvas.clientWidth || preview.renderer.domElement.width
     const oldHeight = preview.canvas.clientHeight || preview.renderer.domElement.height
     preview.renderer.setSize(width, height, false)
@@ -2095,6 +2099,7 @@ export class Engine {
     const previousShadowCatcher = this.shadowCatcher.visible
     const previousEnvironment = this.environmentGroup.visible
     const previousGroundProxy = this.groundProxy.visible
+    const previousSpark = this.spark.visible
     const previousTransformHelper = this.transformHelper.visible
     const cameraVisibility = Array.from(this.rigs.values()).map((item) => ({
       item,
@@ -2127,6 +2132,7 @@ export class Engine {
       this.shadowCatcher.visible = false
       this.environmentGroup.visible = false
       this.groundProxy.visible = false
+      this.spark.visible = false
       this.transformHelper.visible = false
       for (const entry of cameraVisibility) {
         entry.item.root.visible = false
@@ -2183,6 +2189,7 @@ export class Engine {
       this.shadowCatcher.visible = previousShadowCatcher
       this.environmentGroup.visible = previousEnvironment
       this.groundProxy.visible = previousGroundProxy
+      this.spark.visible = previousSpark
       this.transformHelper.visible = previousTransformHelper
       for (const entry of cameraVisibility) {
         entry.item.root.visible = entry.root
@@ -2291,6 +2298,7 @@ export class Engine {
     ;(this.bgPlane.material as THREE.Material).dispose()
     this.removePlaneMesh()
     this.clearEnvironment()
+    this.spark.dispose()
     this.groundProxy.geometry.dispose()
     ;(this.groundProxy.material as THREE.Material).dispose()
     this.originHelper.traverse((o) => {
