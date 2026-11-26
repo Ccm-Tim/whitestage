@@ -94,7 +94,7 @@ writeFileSync(
 console.log('[portable] 写入 zip...')
 const files = collect(OUT, 'WhiteStage-portable')
 const zipped = zipSync(files, { level: 6 })
-const zipPath = path.join(RELEASE_ROOT, 'WhiteStage-v0.1.4-portable.zip')
+const zipPath = path.join(RELEASE_ROOT, 'WhiteStage-v0.1.5-portable.zip')
 writeFileSync(zipPath, zipped)
 console.log('')
 console.log(`[portable] 目录: ${OUT}`)
