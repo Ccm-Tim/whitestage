@@ -1,12 +1,15 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { TransformControls } from 'three/addons/controls/TransformControls.js'
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
+import { PLYLoader } from 'three/addons/loaders/PLYLoader.js'
 import { strToU8, zipSync } from 'fflate'
 import type {
   BackgroundConfig,
   BoardBackground,
   CameraConfig,
   CameraTargetLock,
+  EnvironmentConfig,
   ImageBackground,
   PanoBackground,
   Project,
@@ -42,6 +45,29 @@ function linearBufferToSrgb(buffer: Uint8Array): void {
     buffer[i + 1] = LINEAR_TO_SRGB[buffer[i + 1]]
     buffer[i + 2] = LINEAR_TO_SRGB[buffer[i + 2]]
   }
+}
+
+/** .splat（Antimatter15 格式）每 32 字节：位置 3f、缩放 3f、颜色 4u8、旋转 4u8。先按点云预览。 */
+function parseSplatGeometry(buffer: ArrayBuffer): THREE.BufferGeometry | null {
+  const stride = 32
+  const count = Math.floor(buffer.byteLength / stride)
+  if (count <= 0) return null
+  const view = new DataView(buffer)
+  const positions = new Float32Array(count * 3)
+  const colors = new Uint8Array(count * 3)
+  for (let i = 0; i < count; i += 1) {
+    const offset = i * stride
+    positions[i * 3] = view.getFloat32(offset, true)
+    positions[i * 3 + 1] = view.getFloat32(offset + 4, true)
+    positions[i * 3 + 2] = view.getFloat32(offset + 8, true)
+    colors[i * 3] = view.getUint8(offset + 24)
+    colors[i * 3 + 1] = view.getUint8(offset + 25)
+    colors[i * 3 + 2] = view.getUint8(offset + 26)
+  }
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3, true))
+  return geometry
 }
 
 const PART_ORDER = [
@@ -109,6 +135,7 @@ export interface EngineCallbacks {
     patch: { position?: Vec3; rotation?: Vec3; scale?: Vec3 },
   ) => void
   onPickTarget: (target: CameraTargetLock | null) => void
+  onEnvironmentError?: (message: string) => void
 }
 
 interface Rig {
@@ -349,6 +376,11 @@ export class Engine {
   private planeMesh: THREE.Mesh | null = null
   private backgroundInEditor = true
   private stageFog = true
+  private stageShadows = true
+  private environmentGroup = new THREE.Group()
+  private environmentKey = ''
+  private environmentLoadToken = 0
+  private environmentContactShadows = true
   private outputWidth = 1920
   private outputHeight = 1080
   private hemi: THREE.HemisphereLight
@@ -450,6 +482,9 @@ export class Engine {
     this.ground.rotation.x = -Math.PI / 2
     this.ground.receiveShadow = false
     this.scene.add(this.ground)
+
+    this.environmentGroup.name = 'WhiteStageEnvironment'
+    this.scene.add(this.environmentGroup)
 
     this.shadowCatcher = new THREE.Mesh(
       new THREE.CircleGeometry(12, 72),
@@ -1518,6 +1553,117 @@ export class Engine {
     }
   }
 
+  private applyEnvironmentTransform(env: EnvironmentConfig) {
+    const group = this.environmentGroup
+    group.visible = env.visible
+    group.position.set(env.position.x, env.position.y, env.position.z)
+    group.rotation.y = deg(env.rotation)
+    group.scale.setScalar(env.scale)
+    group.traverse((child) => {
+      if (child instanceof THREE.Points) {
+        const material = child.material as THREE.PointsMaterial
+        material.opacity = env.opacity
+        material.transparent = env.opacity < 1
+        material.depthWrite = env.opacity >= 1
+      } else if (child instanceof THREE.Mesh) {
+        child.receiveShadow = env.contactShadows
+        const materials = Array.isArray(child.material) ? child.material : [child.material]
+        for (const material of materials) {
+          material.transparent = env.opacity < 1
+          material.opacity = env.opacity
+          material.depthWrite = true
+        }
+      }
+    })
+    this.environmentContactShadows = env.contactShadows
+    this.shadowCatcher.visible = this.stageShadows && env.contactShadows
+  }
+
+  private clearEnvironment() {
+    for (const child of [...this.environmentGroup.children]) {
+      this.environmentGroup.remove(child)
+      child.traverse((object) => {
+        if (object instanceof THREE.Mesh || object instanceof THREE.Points) {
+          object.geometry.dispose()
+          const materials = Array.isArray(object.material) ? object.material : [object.material]
+          for (const material of materials) {
+            for (const value of Object.values(material)) {
+              if (value instanceof THREE.Texture) value.dispose()
+            }
+            material.dispose()
+          }
+        }
+      })
+    }
+  }
+
+  private async syncEnvironment(env: EnvironmentConfig) {
+    const key = `${env.kind}:${env.assetId ?? ''}`
+    if (key !== this.environmentKey) {
+      this.environmentKey = key
+      const token = ++this.environmentLoadToken
+      this.clearEnvironment()
+      if (env.kind !== 'none' && env.assetId) {
+        await this.loadEnvironment(env, token)
+      }
+    }
+    this.applyEnvironmentTransform(env)
+  }
+
+  private async loadEnvironment(env: EnvironmentConfig, token: number) {
+    if (!env.assetId) return
+    try {
+      const asset = await getAsset(env.assetId)
+      if (!asset || token !== this.environmentLoadToken) return
+      const buffer = await asset.blob.arrayBuffer()
+      if (token !== this.environmentLoadToken) return
+      const group = new THREE.Group()
+      group.name = `Environment:${env.kind}`
+      if (env.kind === 'glb') {
+        const gltf = await new GLTFLoader().parseAsync(buffer, '')
+        if (token !== this.environmentLoadToken) return
+        group.add(gltf.scene)
+      } else if (env.kind === 'ply') {
+        const geometry = new PLYLoader().parse(buffer)
+        if (!geometry.getAttribute('position')) throw new Error('PLY 没有顶点数据')
+        const hasColor = !!geometry.getAttribute('color')
+        const points = new THREE.Points(
+          geometry,
+          new THREE.PointsMaterial({
+            size: 0.018,
+            sizeAttenuation: true,
+            vertexColors: hasColor,
+            color: hasColor ? 0xffffff : 0xbfc8d4,
+            transparent: true,
+            depthWrite: true,
+          }),
+        )
+        group.add(points)
+      } else if (env.kind === 'splat') {
+        const geometry = parseSplatGeometry(buffer)
+        if (!geometry) throw new Error('SPLAT 数据为空')
+        const points = new THREE.Points(
+          geometry,
+          new THREE.PointsMaterial({
+            size: 0.018,
+            sizeAttenuation: true,
+            vertexColors: true,
+            transparent: true,
+            depthWrite: true,
+          }),
+        )
+        group.add(points)
+      }
+      if (token !== this.environmentLoadToken) return
+      this.clearEnvironment()
+      this.environmentGroup.add(group)
+      this.applyEnvironmentTransform(env)
+    } catch (err) {
+      console.error('3D 环境加载失败', err)
+      this.callbacks.onEnvironmentError?.(err instanceof Error ? err.message : String(err))
+    }
+  }
+
   syncProject(project: Project) {
     this.syncBackground(project)
     this.backgroundInEditor = project.ui.backgroundInEditor
@@ -1531,7 +1677,10 @@ export class Engine {
     }
     this.whiteFloorMesh.visible = project.stage.whiteFloor
     this.keyLight.castShadow = project.stage.shadows
-    this.shadowCatcher.visible = project.stage.shadows
+    this.stageShadows = project.stage.shadows
+    this.shadowCatcher.visible = project.stage.shadows && project.environment.contactShadows
+    this.environmentContactShadows = project.environment.contactShadows
+    void this.syncEnvironment(project.environment)
     const background = project.background
     const solidLike =
       background.kind === 'solid' ||
@@ -1918,6 +2067,7 @@ export class Engine {
     const previousFog = this.scene.fog
     const previousGround = this.ground.visible
     const previousShadowCatcher = this.shadowCatcher.visible
+    const previousEnvironment = this.environmentGroup.visible
     const previousTransformHelper = this.transformHelper.visible
     const cameraVisibility = Array.from(this.rigs.values()).map((item) => ({
       item,
@@ -1948,6 +2098,7 @@ export class Engine {
       this.scene.fog = null
       this.ground.visible = false
       this.shadowCatcher.visible = false
+      this.environmentGroup.visible = false
       this.transformHelper.visible = false
       for (const entry of cameraVisibility) {
         entry.item.root.visible = false
@@ -2002,6 +2153,7 @@ export class Engine {
       this.scene.fog = previousFog
       this.ground.visible = previousGround
       this.shadowCatcher.visible = previousShadowCatcher
+      this.environmentGroup.visible = previousEnvironment
       this.transformHelper.visible = previousTransformHelper
       for (const entry of cameraVisibility) {
         entry.item.root.visible = entry.root
@@ -2109,6 +2261,7 @@ export class Engine {
     this.bgPlane.geometry.dispose()
     ;(this.bgPlane.material as THREE.Material).dispose()
     this.removePlaneMesh()
+    this.clearEnvironment()
     this.originHelper.traverse((o) => {
       const mesh = o as THREE.Mesh
       if (mesh.geometry) mesh.geometry.dispose()
