@@ -189,6 +189,7 @@ interface AppState {
   undo: () => void
   redo: () => void
   importEnvironment: (file: File) => Promise<void>
+  reloadEnvironment: () => Promise<void>
   updateEnvironment: (patch: Partial<EnvironmentConfig>) => void
   removeEnvironment: () => void
   setBackground: (background: BackgroundConfig) => void
@@ -1130,9 +1131,11 @@ export const useStore = create<AppState>()(
           ? 'ply'
           : lower.endsWith('.splat')
             ? 'splat'
-            : 'none'
+            : lower.endsWith('.spz')
+              ? 'spz'
+              : 'none'
       if (kind === 'none') {
-        get().toast('只支持 .glb / .ply / .splat 环境文件', 'error')
+        get().toast('只支持 .glb / .ply / .splat / .spz 环境文件', 'error')
         return
       }
       const assetId = uid()
@@ -1158,16 +1161,33 @@ export const useStore = create<AppState>()(
             showInOutput: true,
             opacity: 1,
             contactShadows: true,
+            gaussian: project.environment.gaussian,
           })
           s.dirty = true
         })
         get().toast(
-          kind === 'glb' ? '3D 环境已导入：GLB 网格' : '3D 环境已导入：点云近似预览',
+          kind === 'glb' ? '3D 环境已导入：GLB 网格' : '3D 环境已导入：Gaussian Splatting（Spark）',
           'success',
         )
       } catch (err) {
         get().toast('导入 3D 环境失败：' + errorMessage(err), 'error')
       }
+    },
+
+    reloadEnvironment: async () => {
+      const project = get().project
+      const env = project?.environment
+      if (!env?.assetId) return
+      const asset = await getAsset(env.assetId)
+      if (!asset) {
+        get().toast('环境资源缺失，请重新导入', 'error')
+        return
+      }
+      await get().importEnvironment(
+        new File([asset.blob], env.name || asset.name, {
+          type: asset.type || 'application/octet-stream',
+        }),
+      )
     },
 
     updateEnvironment: (patch) => {
