@@ -119,6 +119,29 @@ export interface StageSettings {
   fog: boolean
 }
 
+/** 导入的真实 3D 环境；GLB 是网格，PLY / SPLAT 先以点云近似预览。 */
+export type EnvironmentKind = 'none' | 'glb' | 'ply' | 'splat'
+
+export interface EnvironmentConfig {
+  kind: EnvironmentKind
+  assetId: string | null
+  name: string
+  /** 环境整体缩放；用于把扫描/重建场景校准到真实米制 */
+  scale: number
+  /** 绕 Y 轴旋转（度） */
+  rotation: number
+  /** 世界位置；y 同时作为地面高度校准 */
+  position: Vec3
+  /** 是否在编辑视口显示 */
+  visible: boolean
+  /** 是否参与预览 / 视频导出 */
+  showInOutput: boolean
+  /** 环境半透明时降低干扰，默认 1 */
+  opacity: number
+  /** 地面接触阴影 */
+  contactShadows: boolean
+}
+
 export interface OutputSettings {
   aspect: AspectId
   width: number
@@ -256,6 +279,7 @@ export interface Project {
   updatedAt: number
   background: BackgroundConfig
   stage: StageSettings
+  environment: EnvironmentConfig
   output: OutputSettings
   cameras: CameraConfig[]
   objects: SceneObject[]
