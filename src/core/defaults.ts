@@ -121,6 +121,8 @@ export function normalizeEnvironment(input?: Partial<EnvironmentConfig>): Enviro
   const scale = Number(input?.scale)
   const rotation = Number(input?.rotation)
   const opacity = Number(input?.opacity)
+  const groundSize = Number(input?.ground?.size)
+  const groundOpacity = Number(input?.ground?.opacity)
   return {
     kind,
     assetId: kind !== 'none' && typeof input?.assetId === 'string' && input.assetId ? input.assetId : null,
@@ -136,6 +138,17 @@ export function normalizeEnvironment(input?: Partial<EnvironmentConfig>): Enviro
     showInOutput: input?.showInOutput !== false,
     opacity: Number.isFinite(opacity) ? Math.min(1, Math.max(0.05, opacity)) : 1,
     contactShadows: input?.contactShadows !== false,
+    ground: {
+      enabled: input?.ground?.enabled !== false,
+      size: Number.isFinite(groundSize) ? Math.min(500, Math.max(2, groundSize)) : 40,
+      color:
+        typeof input?.ground?.color === 'string' && /^#[0-9a-f]{6}$/i.test(input.ground.color)
+          ? input.ground.color
+          : '#30343a',
+      opacity: Number.isFinite(groundOpacity)
+        ? Math.min(1, Math.max(0, groundOpacity))
+        : 0.72,
+    },
   }
 }
 
