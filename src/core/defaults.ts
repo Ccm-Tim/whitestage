@@ -3,6 +3,7 @@ import type {
   BackgroundConfig,
   CameraConfig,
   CameraTargetLock,
+  EnvironmentConfig,
   Project,
   Vec3,
 } from './types'
@@ -112,6 +113,37 @@ export function targetLabel(
   return camera ? camera.name : '已删除的机位'
 }
 
+export function normalizeEnvironment(input?: Partial<EnvironmentConfig>): EnvironmentConfig {
+  const kind: EnvironmentConfig['kind'] =
+    input?.kind === 'glb' || input?.kind === 'ply' || input?.kind === 'splat'
+      ? input.kind
+      : 'none'
+  const scale = Number(input?.scale)
+  const rotation = Number(input?.rotation)
+  const opacity = Number(input?.opacity)
+  return {
+    kind,
+    assetId: kind !== 'none' && typeof input?.assetId === 'string' && input.assetId ? input.assetId : null,
+    name: typeof input?.name === 'string' && input.name.trim() ? input.name : '3D 环境',
+    scale: Number.isFinite(scale) ? Math.min(1000, Math.max(0.01, scale)) : 1,
+    rotation: Number.isFinite(rotation) ? rotation : 0,
+    position: {
+      x: Number(input?.position?.x) || 0,
+      y: Number(input?.position?.y) || 0,
+      z: Number(input?.position?.z) || 0,
+    },
+    visible: input?.visible !== false,
+    showInOutput: input?.showInOutput !== false,
+    opacity: Number.isFinite(opacity) ? Math.min(1, Math.max(0.05, opacity)) : 1,
+    contactShadows: input?.contactShadows !== false,
+  }
+}
+
+export function environmentAssetId(project: Pick<Project, 'environment'>): string | null {
+  const env = project.environment
+  return env.kind !== 'none' && env.assetId ? env.assetId : null
+}
+
 export function createProject(name: string, aspect: AspectId = '16:9'): Project {
   const a = ASPECTS[aspect]
   const cam = createCamera('镜头 1', { x: 4.2, y: 2.25, z: 5.8 })
@@ -123,6 +155,7 @@ export function createProject(name: string, aspect: AspectId = '16:9'): Project 
     updatedAt: Date.now(),
     background: { kind: 'solid', color: '#eef0f2', preset: 'white' },
     stage: { grid: true, gridWidth: 3, whiteFloor: false, shadows: true, fog: true },
+    environment: normalizeEnvironment(),
     output: { aspect, width: a.width, height: a.height, fps: 24 },
     cameras: [cam],
     objects: [],
@@ -310,6 +343,7 @@ export function normalizeProject(input: Partial<Project> & { name?: string }): P
     createdAt: input.createdAt || base.createdAt,
     updatedAt: input.updatedAt || base.updatedAt,
     background: normalizeBackground(input.background),
+    environment: normalizeEnvironment(input.environment),
     stage,
     output: { ...base.output, ...(input.output ?? {}) },
     cameras,
