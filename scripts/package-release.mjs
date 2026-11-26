@@ -2,7 +2,7 @@
 /**
  * 生成 WhiteStage 正式发布包：
  *   release/WhiteStage/      可直接运行的目录
- *   release/WhiteStage-v0.1.5.zip
+ *   release/WhiteStage-v0.1.6.zip
  *
  * 发布包只需要 Node.js，不需要 npm install / Vite。
  */
@@ -103,7 +103,7 @@ if errorlevel 1 (
   echo [错误] 没有检测到 Node.js。
   echo 这个发布版需要 Node.js 才能启动本地服务。
   echo 请安装 Node.js LTS（https://nodejs.org/），安装后重新双击本文件。
-  echo 也可以使用 WhiteStage-v0.1.5-portable.zip 便携版，无需安装 Node。
+  echo 也可以使用 WhiteStage-v0.1.6-portable.zip 便携版，无需安装 Node。
   echo.
   pause
   exit /b 1
@@ -224,7 +224,7 @@ console.log('[package] 写入 zip ...')
 normalizeBatLineEndings(OUT)
 const files = collect(OUT, 'WhiteStage')
 const zipped = zipSync(files, { level: 6 })
-const zipPath = path.join(RELEASE_ROOT, 'WhiteStage-v0.1.5.zip')
+const zipPath = path.join(RELEASE_ROOT, 'WhiteStage-v0.1.6.zip')
 writeFileSync(zipPath, zipped)
 console.log('')
 console.log(`[package] 目录: ${OUT}`)
