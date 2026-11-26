@@ -28,8 +28,11 @@ type TemplateModalState = {
 
 export function Inspector() {
   const project = useStore((s) => s.project)
+  const environment = project?.environment ?? null
   const selectedId = useStore((s) => s.selectedCameraId)
   const selectedObjectId = useStore((s) => s.selectedObjectId)
+  const selectedCamera = project?.cameras.find((camera) => camera.id === selectedId) ?? null
+  const selectedObject = project?.objects.find((object) => object.id === selectedObjectId) ?? null
   const autosaveMinutes = useStore((s) => s.autosaveMinutes)
   const setBackground = useStore((s) => s.setBackground)
   const toggleStage = useStore((s) => s.toggleStage)
@@ -38,6 +41,10 @@ export function Inspector() {
   const setOutputAspect = useStore((s) => s.setOutputAspect)
   const setAutosaveMinutes = useStore((s) => s.setAutosaveMinutes)
   const exportProject = useStore((s) => s.exportProject)
+  const importEnvironment = useStore((s) => s.importEnvironment)
+  const updateEnvironment = useStore((s) => s.updateEnvironment)
+  const removeEnvironment = useStore((s) => s.removeEnvironment)
+  const patchObject = useStore((s) => s.patchObject)
   const addCamera = useStore((s) => s.addCamera)
   const removeCamera = useStore((s) => s.removeCamera)
   const renameCamera = useStore((s) => s.renameCamera)
@@ -81,6 +88,7 @@ export function Inspector() {
   const lensFileRef = useRef<HTMLInputElement>(null)
   const bgFileRef = useRef<HTMLInputElement>(null)
   const boardFileRef = useRef<HTMLInputElement>(null)
+  const envFileRef = useRef<HTMLInputElement>(null)
   const [pendingBg, setPendingBg] = useState<{
     file: File
     url: string
@@ -666,6 +674,178 @@ export function Inspector() {
                 checked={!project.ui.backgroundInEditor}
                 onChange={() => setBackgroundInEditor(!project.ui.backgroundInEditor)}
               />
+            </Section>
+
+            <Section
+              title="3D 环境"
+              action={
+                <span className="badge soft">
+                  {project.environment.kind === 'glb'
+                    ? 'GLB 网格'
+                    : project.environment.kind === 'ply'
+                      ? 'PLY 点云'
+                      : project.environment.kind === 'splat'
+                        ? 'SPLAT 点云'
+                        : '未导入'}
+                </span>
+              }
+            >
+              <p className="note">
+                导入真实 3D 场景，让人偶和机位进入环境。GLB 是真网格；PLY / SPLAT 先按点云近似预览，
+                用于快速对位，最终质量取决于重建资产。
+              </p>
+              <div className="bg-actions">
+                <button className="mini-btn" onClick={() => envFileRef.current?.click()}>
+                  <IconUpload size={12} />
+                  导入 3D 环境
+                </button>
+                {project.environment.kind !== 'none' ? (
+                  <button className="mini-btn" onClick={removeEnvironment}>
+                    移除环境
+                  </button>
+                ) : null}
+              </div>
+              <input
+                ref={envFileRef}
+                type="file"
+                accept=".glb,.ply,.splat"
+                style={{ display: 'none' }}
+                onChange={async (event) => {
+                  const file = event.target.files?.[0]
+                  event.target.value = ''
+                  if (file) await importEnvironment(file)
+                }}
+              />
+
+              {project.environment.kind !== 'none' ? (
+                <>
+                  <Readout>
+                    环境：{project.environment.name}
+                    <br />
+                    地面 Y {project.environment.position.y.toFixed(2)}m · 缩放{' '}
+                    {project.environment.scale.toFixed(2)}×
+                  </Readout>
+                  <SliderField
+                    label="环境缩放"
+                    min={0.01}
+                    max={1000}
+                    step={0.01}
+                    value={project.environment.scale}
+                    onChange={(value) => updateEnvironment({ scale: value })}
+                  />
+                  <SliderField
+                    label="环境旋转"
+                    min={-180}
+                    max={180}
+                    step={1}
+                    value={project.environment.rotation}
+                    unit="°"
+                    onChange={(value) => updateEnvironment({ rotation: value })}
+                  />
+                  <Field label="环境位置 / 地面 Y">
+                    <div className="axis-grid">
+                      {(['x', 'y', 'z'] as const).map((axis) => (
+                        <div className="axis-field" key={axis}>
+                          <span className={`axis-tag ${axis}`}>{axis.toUpperCase()}</span>
+                          <NumField
+                            value={project.environment.position[axis]}
+                            step={0.1}
+                            digits={2}
+                            onChange={(value) =>
+                              updateEnvironment({
+                                position: { ...project.environment.position, [axis]: value },
+                              })
+                            }
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </Field>
+                  <SliderField
+                    label="环境不透明度"
+                    min={0.05}
+                    max={1}
+                    step={0.01}
+                    value={project.environment.opacity}
+                    onChange={(value) => updateEnvironment({ opacity: value })}
+                  />
+                  <Toggle
+                    label="显示 3D 环境"
+                    hint="关闭后只显示白膜舞台，环境仍保留"
+                    checked={project.environment.visible}
+                    onChange={() =>
+                      updateEnvironment({ visible: !project.environment.visible })
+                    }
+                  />
+                  <Toggle
+                    label="接触阴影"
+                    hint="人偶/道具在地面上的阴影；对点云环境尤其重要"
+                    checked={project.environment.contactShadows}
+                    onChange={() =>
+                      updateEnvironment({ contactShadows: !project.environment.contactShadows })
+                    }
+                  />
+                  <div className="bg-actions">
+                    <button
+                      className="mini-btn"
+                      onClick={() =>
+                        updateEnvironment({
+                          scale: 1,
+                          rotation: 0,
+                          position: { x: 0, y: 0, z: 0 },
+                        })
+                      }
+                    >
+                      重置环境变换
+                    </button>
+                  </div>
+                  <p className="note">
+                    调「环境位置 Y」把场景地面落到 0；调「环境缩放」直到门、桌椅、人偶比例合理。
+                    机位高度和对象落地在下面「场景校准」里处理。
+                  </p>
+                </>
+              ) : (
+                <p className="note">支持 `.glb` / `.ply` / `.splat`。GLB 会真实遮挡人偶，点云为快速近似。</p>
+              )}
+            </Section>
+
+            <Section title="场景校准">
+              <Readout>
+                {selectedCamera
+                  ? `当前机位：${selectedCamera.name} · 高度 ${selectedCamera.position.y.toFixed(2)}m`
+                  : '先选一个机位'}
+              </Readout>
+              <div className="bg-actions">
+                <button
+                  className="mini-btn"
+                  disabled={!selectedCamera}
+                  onClick={() => {
+                    if (!selectedCamera) return
+                    patchCamera(selectedCamera.id, {
+                      position: { ...selectedCamera.position, y: 1.6 },
+                    })
+                  }}
+                >
+                  当前机位高度设为 1.6m
+                </button>
+                <button
+                  className="mini-btn"
+                  disabled={!selectedObject}
+                  onClick={() => {
+                    if (!selectedObject) return
+                    patchObject(selectedObject.id, {
+                      position: { ...selectedObject.position, y: 0 },
+                      allowUnderground: false,
+                    })
+                  }}
+                >
+                  选中对象落地
+                </button>
+              </div>
+              <p className="note">
+                推荐顺序：先对环境中门/桌椅设比例，再设机位高度 1.6m，最后把 1.7m 左右的人偶落地。
+                人偶身高在「对象 → 对象参数」里调；这里不会自动猜图里的真实尺度。
+              </p>
             </Section>
 
             <Section title="舞台">
