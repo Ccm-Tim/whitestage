@@ -9,6 +9,7 @@ import type {
   CameraConfig,
   CameraTargetLock,
   CustomCharacter,
+  EnvironmentConfig,
   ImageBackground,
   LensTemplate,
   PanoBackground,
@@ -23,6 +24,8 @@ import {
   createCamera,
   createDemoProject,
   createProject,
+  environmentAssetId,
+  normalizeEnvironment,
   normalizeProject,
   resolveTargetPosition,
   uid,
@@ -185,6 +188,9 @@ interface AppState {
   checkpoint: (key?: string) => void
   undo: () => void
   redo: () => void
+  importEnvironment: (file: File) => Promise<void>
+  updateEnvironment: (patch: Partial<EnvironmentConfig>) => void
+  removeEnvironment: () => void
   setBackground: (background: BackgroundConfig) => void
   applyBackgroundFile: (file: File, kind: BackgroundUploadKind) => Promise<void>
   applyBoardFiles: (files: File[]) => Promise<void>
@@ -464,6 +470,10 @@ export const useStore = create<AppState>()(
         if (missingBackgroundAsset) {
           project.background = { kind: 'solid', color: '#eef0f2', preset: 'white' }
         }
+        const envAssetId = environmentAssetId(project)
+        if (envAssetId && !(await getAsset(envAssetId))) {
+          project.environment = normalizeEnvironment()
+        }
         set((s) => {
           s.project = project
           s.view = 'editor'
@@ -518,6 +528,10 @@ export const useStore = create<AppState>()(
           if (missing.some(Boolean)) {
             project.background = { kind: 'solid', color: '#eef0f2', preset: 'white' }
           }
+        }
+        const envAssetId = environmentAssetId(project)
+        if (envAssetId && !(await getAsset(envAssetId))) {
+          project.environment = normalizeEnvironment()
         }
         set((s) => {
           s.project = project
@@ -1104,6 +1118,80 @@ export const useStore = create<AppState>()(
       } catch (err) {
         get().toast('导入自定义角色失败：' + errorMessage(err), 'error')
       }
+    },
+
+    importEnvironment: async (file) => {
+      const project = get().project
+      if (!project) return
+      const lower = file.name.toLowerCase()
+      const kind: EnvironmentConfig['kind'] = lower.endsWith('.glb')
+        ? 'glb'
+        : lower.endsWith('.ply')
+          ? 'ply'
+          : lower.endsWith('.splat')
+            ? 'splat'
+            : 'none'
+      if (kind === 'none') {
+        get().toast('只支持 .glb / .ply / .splat 环境文件', 'error')
+        return
+      }
+      const assetId = uid()
+      try {
+        await putAsset({
+          id: assetId,
+          projectId: project.id,
+          name: file.name,
+          type: file.type || (kind === 'glb' ? 'model/gltf-binary' : 'application/octet-stream'),
+          blob: file,
+        })
+        get().checkpoint('environment')
+        set((s) => {
+          if (!s.project) return
+          s.project.environment = normalizeEnvironment({
+            kind,
+            assetId,
+            name: file.name,
+            scale: 1,
+            rotation: 0,
+            position: { x: 0, y: 0, z: 0 },
+            visible: true,
+            showInOutput: true,
+            opacity: 1,
+            contactShadows: true,
+          })
+          s.dirty = true
+        })
+        get().toast(
+          kind === 'glb' ? '3D 环境已导入：GLB 网格' : '3D 环境已导入：点云近似预览',
+          'success',
+        )
+      } catch (err) {
+        get().toast('导入 3D 环境失败：' + errorMessage(err), 'error')
+      }
+    },
+
+    updateEnvironment: (patch) => {
+      get().checkpoint('environment')
+      set((s) => {
+        if (!s.project) return
+        const current = s.project.environment
+        s.project.environment = normalizeEnvironment({
+          ...current,
+          ...patch,
+          position: { ...current.position, ...(patch.position ?? {}) },
+        })
+        s.dirty = true
+      })
+    },
+
+    removeEnvironment: () => {
+      get().checkpoint('environment')
+      set((s) => {
+        if (!s.project) return
+        s.project.environment = normalizeEnvironment()
+        s.dirty = true
+      })
+      get().toast('已移除 3D 环境', 'success')
     },
 
     setBackground: (background) => {
@@ -1762,7 +1850,10 @@ export const useStore = create<AppState>()(
           return
         }
         const assets: ProjectAssetFile[] = []
-        for (const assetId of backgroundAssetIds(project.background)) {
+        const assetIds = [...backgroundAssetIds(project.background)]
+        const envId = environmentAssetId(project)
+        if (envId) assetIds.push(envId)
+        for (const assetId of assetIds) {
           const asset = await getAsset(assetId)
           if (asset) {
             assets.push({
