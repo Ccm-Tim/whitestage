@@ -140,6 +140,13 @@ export interface EnvironmentConfig {
   opacity: number
   /** 地面接触阴影 */
   contactShadows: boolean
+  /** 混合场景的地面代理：补 3DGS/点云底部空洞，负责脚底接地 */
+  ground: {
+    enabled: boolean
+    size: number
+    color: string
+    opacity: number
+  }
 }
 
 export interface OutputSettings {
