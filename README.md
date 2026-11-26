@@ -6,8 +6,8 @@
 
 ## 使用说明书
 
-- [图文使用说明书 PDF](docs/WhiteStage_使用说明书_v0.1.5.pdf)
-- [图文使用说明书 Word](docs/WhiteStage_使用说明书_v0.1.5.docx)
+- [图文使用说明书 PDF](docs/WhiteStage_使用说明书_v0.1.6.pdf)
+- [图文使用说明书 Word](docs/WhiteStage_使用说明书_v0.1.6.docx)
 - [GitHub Releases 下载](https://github.com/Ccm-Tim/whitestage/releases/latest)
 
 ---
@@ -52,8 +52,8 @@ npm run package:portable
 会先清理并重建 `dist/`，然后生成：
 
 - `release/WhiteStage/`：可直接运行的发布目录，不需要 `npm install` / Vite；
-- `release/WhiteStage-v0.1.5.zip`：标准版（需要 Node.js）；
-- `release/WhiteStage-v0.1.5-portable.zip`：便携版（内置 Node.js 运行时）。
+- `release/WhiteStage-v0.1.6.zip`：标准版（需要 Node.js）；
+- `release/WhiteStage-v0.1.6-portable.zip`：便携版（内置 Node.js 运行时）。
 
 下载已构建版本：
 
@@ -82,6 +82,7 @@ npm run package:portable
 - **工程文件**：`.wsp`（zip：`project.json` + `manifest.json` + `thumb.jpg` + `assets/`），背景图片会一起打包；可导出 / 导入
 - **3D 舞台**：无限延展的白膜 / 绿幕 / 蓝幕 / 自定义纯色背景，网格粗细可调、局部白色地面、地面阴影、雾效
 - **3D 环境**：导入 GLB 网格（真实遮挡）或 PLY / SPLAT 点云（近似预览）；支持环境缩放、旋转、位置 / 地面 Y、透明度、接触阴影；可按 1.6m 机位高度和已知尺寸参照物校准人偶比例；环境随 `.wsp` 工程保存
+- **混合 3D 环境**：3D 环境负责近中景，360 全景作为远景/补洞，地面代理补点云底部空洞和脚底接地；地面代理可独立开关、调尺寸/颜色/不透明度
 - **工作台背景**：可以只在预览窗显示背景，工作台保持白膜场景；网格和局部白色地面只在编辑器显示，不进入输出
 - **背景图片与全景**：普通 2D 图片（屏幕贴片 / 实体背景板）、360° 等距柱状全景、180° 全景、星球全景近似展开为 360°；上传后弹窗确认类型，2D 支持拖动偏移 / 缩放 / 旋转，全景支持水平旋转、俯仰 / 翻滚校准
 - **白膜人偶**：成人男 / 成人女 / 男孩 / 女孩，身高、训练服颜色、头/手颜色、鞋子颜色、面部五官开关，站立 / 行走 / 奔跑 / 坐姿 / 挥手 / T 型；程序化白膜模型，无需外部素材
